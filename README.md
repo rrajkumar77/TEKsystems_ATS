@@ -1,2 +1,2 @@
-# TEKsystems_ATS
-TEKsystems ATS
+# ATS
+Application Tracking System

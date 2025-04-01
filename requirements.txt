@@ -1,0 +1,14 @@
+streamlit
+requests
+PyPDF2
+python-dotenv
+
+streamlit
+PyPDF2
+google-generativeai
+python-dotenv
+PyMuPDF
+fitz
+langchain-experimental
+python-docx
+pymupdf
