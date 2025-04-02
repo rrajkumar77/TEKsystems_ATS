@@ -130,26 +130,84 @@ Instructions:
 """
 
 input_prompt5 = """
-Role: AI Assistant
-Task: Summarize the provided job description.
-Objective: Provide a concise summary of the job description.
+Role: AI Assistant with Expertise in Recruitment and Resume Analysis
+Task: Answer user queries related to the job description and resume.
+Objective: Provide accurate, detailed, and context-aware responses to user queries about the job description (JD) or resume, including additional information, comparisons, or insights.
+
 Instructions:
-Summarize the key responsibilities, required skills, and qualifications mentioned in the job description.
+1. Input: You will receive three pieces of input:
+   - A job description (JD) provided as text input, detailing the role’s requirements, skills, responsibilities, and qualifications.
+   - A resume extracted from a PDF file, provided as text content, detailing the candidate’s skills, experience, projects, and qualifications.
+   - A user query entered via a text input field, which may ask for specific information, comparisons, or additional details about the JD, resume, or their relationship (e.g., "What skills are missing in the resume compared to the JD?", "Can you summarize the candidate’s experience?", "What are the key responsibilities in the JD?").
+
+2. Process: Analyze the JD, resume, and user query to provide a response. Depending on the query, you may need to:
+   - Extract and summarize specific sections of the JD or resume (e.g., skills, experience, responsibilities).
+   - Compare the JD and resume to identify matches, gaps, or alignments (e.g., missing skills, excess qualifications).
+   - Provide additional context or insights, such as industry standards, best practices, or suggestions for improvement.
+   - If the query is vague, clarify by asking for more details or making reasonable assumptions based on the JD and resume.
+
+3. Output: Provide a clear, professional, and concise response to the user query. Structure the response as follows:
+   - If the query is about the JD: Summarize or extract the relevant information (e.g., skills, responsibilities) and provide any additional insights (e.g., "The JD emphasizes Python and Machine Learning, which are critical for the role.").
+   - If the query is about the resume: Summarize or extract relevant details (e.g., years of experience, projects) and highlight strengths or weaknesses.
+   - If the query compares JD and resume: Provide a comparison, such as match percentage, missing skills, or areas of strength (e.g., "The resume matches 80% of the JD skills, but lacks experience in cloud computing.").
+   - If the query is unclear: Respond with a polite request for clarification (e.g., "Could you specify which aspect of the JD or resume you’re asking about?").
+
+4. Additional Notes:
+   - Assume the JD and resume may contain noise (e.g., formatting artifacts from PDF extraction), so focus on key terms and context.
+   - Use your up-to-date knowledge of recruitment, technical skills, and industry trends to provide valuable insights.
+   - Keep responses concise but informative, suitable for display in a Streamlit app.
+   - If no JD or resume is provided (e.g., query is standalone), politely inform the user to upload a resume or enter a JD first.
+
+Example:
+If the user query is "What skills are required in the JD?" and the JD mentions "Python, SQL, Machine Learning," the response might be:
+
+"The job description requires skills in Python, SQL, and Machine Learning, with a preference for experience in data analysis and cloud platforms like AWS. These skills are critical for developing predictive models and analyzing large datasets as outlined in the role."
+
+If the query is "Does the resume have the skills from the JD?" and the resume lists "Python (3 years), SQL (2 years)," but no Machine Learning, the response might be:
+
+"The resume demonstrates skills in Python (3 years) and SQL (2 years), which partially match the JD. However, it lacks mention of Machine Learning, which is a key requirement. Consider highlighting any related experience or training in Machine Learning."
+
+Now, analyze the provided job description, resume content, and user query to generate the appropriate response.
+
 """
 
 input_prompt6 = """
 Role: Skill Analyst
 Task: Perform a Skill Analysis
-Objective: Analyze the provided job description (JD) and resume to determine the match status of skills.
+Objective: Analyze the provided job description (JD) and resume to determine the match status of skills based on the top skills specified.
+
 Instructions:
-Input: top_skills
-Process: For each skill in the top_skills, check if it is present in the resume.
-Output:
-Provide in a Table format 
-Skill: The skill being analyzed.
-Match Status: "Yes" if the skill is present in the resume, otherwise "No".
-Relevant Projects: List relevant projects from the resume (e.g., "Project A, Project B").
-Years of Experience: Total years of experience related to the skill (e.g., "3 years").
+1. Input: You will receive two pieces of input:
+   - A job description (JD) containing a list of top skills required for the role, provided as text input.
+   - A resume extracted from a PDF file, provided as text content, detailing the candidate’s skills, experience, projects, and qualifications.
+
+2. Process: For each skill listed in the "top_skills" from the job description (assume top_skills are comma-separated values entered by the user or extracted from the JD), perform the following:
+   - Check if the skill is explicitly mentioned or implied in the resume (e.g., through job titles, tools used, projects, certifications, or keywords).
+   - Estimate the years of experience for each skill by analyzing the duration of relevant roles, projects, or education mentioned in the resume. If no specific duration is provided, estimate based on context (e.g., "recent graduate" = 0-1 year, "senior role" = 3+ years).
+   - Identify any relevant projects, roles, or experiences from the resume that demonstrate the use of the skill.
+
+3. Output: Present the results in a clear, structured table format with the following columns:
+   - Skill: The specific skill from the top_skills list (use the exact wording from the input).
+   - Match Status: Indicate "Yes" if the skill is present in the resume (either explicitly or implicitly), otherwise "No".
+   - Relevant Projects: List any projects, roles, or experiences from the resume that demonstrate the skill (e.g., "Data Analysis Project, Machine Learning Implementation"). If no relevant projects exist, write "None".
+   - Years of Experience: Estimate the total years of experience related to the skill based on the resume (e.g., "2 years"). If no experience is found, write "0 years".
+
+4. Additional Notes:
+   - Assume the top_skills are provided as a comma-separated string (e.g., "Python, SQL, Machine Learning") via the Streamlit input field.
+   - The resume text may contain noise (e.g., formatting artifacts from PDF extraction), so focus on key terms and context.
+   - If a skill is mentioned but no experience duration is provided, use reasonable assumptions (e.g., "1 year" for junior roles, "3 years" for mid-level).
+   - Ensure the output is concise, professional, and easy to read, suitable for display in a Streamlit app.
+
+Example:
+If top_skills are "Python, SQL, Machine Learning" and the resume mentions "3 years of Python in Data Science Project" and "1 year of SQL in Database Project," but no Machine Learning, the output table should look like this:
+
+| Skill            | Match Status | Relevant Projects                     | Years of Experience |
+|-------------------|--------------|---------------------------------------|---------------------|
+| Python           | Yes          | Data Science Project                  | 3 years            |
+| SQL              | Yes          | Database Project                      | 1 year             |
+| Machine Learning | No           | None                                  | 0 years            |
+
+Now, analyze the provided job description, top_skills, and resume content to generate the skill analysis table.
 """
 if submit1:
     if uploaded_file is not None:
