@@ -149,8 +149,8 @@ Instructions:
 # Streamlit App
 st.set_page_config(page_title="Resume Expert")
 
-st.header("JobFit Analyzer")
-st.subheader('This Application helps you to evaluate the Resume Review with the Job Description')
+st.header("TEKsystems JobFit Analyzer")
+st.subheader('This Application helps you to understand the Job Description and evaluate the Resume')
 
 input_text = st.text_input("Job Description: ", key="input_jd")
 submit_jd_summarization = st.button("JD Summarization", key="submit_jd_summarization")
