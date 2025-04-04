@@ -32,9 +32,9 @@ def input_pdf_setup(uploaded_file):
 input_prompt1 = """
 Role: Experienced Technical Human Resource Manager with expertise in technical evaluations and Recruitment
 Task: Review the provided resume against the job description.
-Objective: Evaluate whether the candidate's profile aligns with the "Brand Analytics – Data Analyst" role.
+Objective: Evaluate whether the candidate's profile aligns with the job description.
 Instructions:
-1. Input: A job description (JD) for a Brand Analytics – Data Analyst role in Chennai, India (3-7 years experience), and a resume extracted from a PDF.
+1. Input: A job description (JD), and a resume extracted from a PDF.
 2. Process: Compare the resume to the JD to assess alignment.
 3. Output: Provide:
    - Match percentage between the resume and JD (e.g., "80% match").
@@ -66,7 +66,7 @@ Additional Notes:
 input_prompt3 = """
 Role: ATS Scanner with Domain Expertise
 Task: Evaluate resume against JD for domain fit (e.g., Business Analytics).
-Objective: Assess compatibility from a domain perspective for the "Brand Analytics – Data Analyst" role.
+Objective: Assess compatibility from a domain perspective.
 Instructions:
 1. Input: JD and resume.
 2. Output: 
@@ -78,7 +78,7 @@ Instructions:
 input_prompt4 = """
 Role: ATS Scanner with Technical Expertise
 Task: Evaluate resume against JD for technical fit.
-Objective: Assess compatibility for the "Brand Analytics – Data Analyst" role.
+Objective: Assess compatibility for the JD and resume.
 Instructions:
 1. Calculate match percentage.
 2. Explain match and gaps.
@@ -89,7 +89,7 @@ Instructions:
 
 input_prompt5 = """
 Role: AI Assistant
-Task: Summarize the "Brand Analytics – Data Analyst" JD and provide recruiter recommendations.
+Task: Summarize the JD and provide recruiter recommendations.
 Objective: Summarize key details and suggest sourcing strategies.
 Instructions:
 1. Output two sections:
