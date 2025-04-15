@@ -9,10 +9,8 @@ import docx # type: ignore
 import pandas as pd # type: ignore
 
 
-
-
 # Set page configuration at the very beginning
-st.set_page_config(page_title="Resume Matcher with Skill")
+st.set_page_config(page_title="Multi Resume Matcher with Skills")
 
 load_dotenv()
 
@@ -51,7 +49,7 @@ def extract_skills(text, skill_list):
     skills_found = skill_pattern.findall(text)
     return ", ".join(set(map(str.strip, skills_found))) if skills_found else "N/A"
 
-st.header("Resume Matcher with Skill")
+st.header("Multi Resume Matcher with Skill")
 st.subheader("Upload Resumes to Analyze Matching Scores")
 
 uploaded_resumes = st.file_uploader("Upload Resumes (Multiple PDFs, DOC, DOCX)...", type=["pdf", "doc", "docx"], accept_multiple_files=True)
@@ -76,11 +74,20 @@ if submit:
             
             input_prompt = f"""
             Role: Resume Matcher AI
+
             Task: Evaluate the given resume based on the provided skills.
-            Provide the following details in a structured manner:
-            1. Match Percentage
-            2. Compare with required skills: {skills_required}
-            The output should be structured with labels.
+
+            Output Requirements:
+
+            Match Percentage: Calculate the percentage of skills matched between the resume and the required skills.
+            Skills Comparison: Compare the skills listed in the resume with the required skills and provide a detailed comparison.
+            Output Format:
+
+            Match Percentage: [Percentage]
+            Skills Comparison:
+            Matched Skills: [List of matched skills]
+            Missing Skills: [List of missing skills]
+            Additional Skills: [List of additional skills found in the resume but not required]
             """
             response = get_gemini_response(input_prompt, resume_content)
             
