@@ -73,22 +73,36 @@ if submit:
             resume_skills = extract_skills(resume_content, skills_list)
             
             input_prompt = f"""
-            Role: Resume Matcher AI
+            ```python
+input_prompt = f"""
+Role: Expert Resume Analyzer and Skills Matcher
 
-            Task: Evaluate the given resume based on the provided skills.
+Context: You are analyzing a resume to determine how well it matches with a specific set of required skills: {skills_list}.
 
-            Output Requirements:
+Task: Perform a detailed analysis of the resume content against the required skills.
 
-            Match Percentage: Calculate the percentage of skills matched between the resume and the required skills.
-            Skills Comparison: Compare the skills listed in the resume with the required skills and provide a detailed comparison.
-            Output Format:
+Instructions:
+1. Carefully read through the entire resume text
+2. Identify all skills mentioned in the resume, including both explicit mentions and implied skills from experience descriptions
+3. Compare the identified skills with the required skills list: {skills_list}
+4. Calculate the match percentage based on the number of required skills found in the resume
+5. Consider variations and synonyms of the required skills (e.g., "Python programming" matches "Python")
+6. Assign higher importance to skills that appear multiple times or in recent/relevant experience
 
-            Match Percentage: [Percentage]
-            Skills Comparison:
-            Matched Skills: [List of matched skills]
-            Missing Skills: [List of missing skills]
-            Additional Skills: [List of additional skills found in the resume but not required]
-            """
+Output Requirements (FOLLOW THIS FORMAT EXACTLY):
+Match Percentage: [Calculate as: (Number of matched skills / Total number of required skills) * 100]%
+
+Skills Comparison:
+- Matched Skills: [List all required skills found in the resume, including variations]
+- Missing Skills: [List all required skills NOT found in the resume]
+- Additional Relevant Skills: [List up to 5 valuable skills found in the resume but not in the required list]
+
+Candidate Assessment:
+- Strengths: [2-3 key areas where the candidate's experience aligns well with requirements]
+- Development Areas: [1-2 key gaps based on missing skills]
+- Overall Match Rating: [High/Medium/Low based on match percentage: High ≥ 80%, Medium ≥ 50%, Low < 50%]
+"""
+
             response = get_gemini_response(input_prompt, resume_content)
             
             name = resume.name  # Extract file name as candidate identifier
