@@ -1,9 +1,7 @@
 import streamlit as st
 import google.generativeai as genai
 import os
-import fitz  # PyMuPDF for PDF processing
-import docx  # python-docx for DOCX processing
-import io
+import fitz
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -11,59 +9,24 @@ load_dotenv()
 os.getenv("GOOGLE_API_KEY")
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
-def get_gemini_response(input_jd, resume_content, prompt, additional_input=""):
+def get_gemini_response(input_jd, pdf_content, prompt, additional_input=""):
     model = genai.GenerativeModel('gemini-1.5-flash')
     if additional_input:
-        response = model.generate_content([input_jd, resume_content, prompt, additional_input])
+        response = model.generate_content([input_jd, pdf_content, prompt, additional_input])
     else:
-        response = model.generate_content([input_jd, resume_content, prompt])
+        response = model.generate_content([input_jd, pdf_content, prompt])
     return response.text
 
-def extract_text_from_pdf(file_bytes):
-    """Extract text from PDF file"""
-    document = fitz.open(stream=file_bytes, filetype="pdf")
-    text_parts = []
-    for page in document:
-        text_parts.append(page.get_text())
-    return " ".join(text_parts)
-
-def extract_text_from_docx(file_bytes):
-    """Extract text from DOCX file"""
-    doc = docx.Document(io.BytesIO(file_bytes))
-    text_parts = []
-    for paragraph in doc.paragraphs:
-        text_parts.append(paragraph.text)
-    return " ".join(text_parts)
-
-def extract_text_from_txt(file_bytes):
-    """Extract text from TXT file"""
-    return file_bytes.decode('utf-8')
-
-def process_resume_file(uploaded_file):
-    """Process different file formats and extract text"""
-    if uploaded_file is None:
-        raise FileNotFoundError("No file uploaded")
-    
-    file_bytes = uploaded_file.read()
-    file_extension = uploaded_file.name.split('.')[-1].lower()
-    
-    if file_extension == 'pdf':
-        return extract_text_from_pdf(file_bytes)
-    elif file_extension == 'docx':
-        return extract_text_from_docx(file_bytes)
-    elif file_extension == 'doc':
-        # For DOC files, we need to inform the user about potential limitations
-        st.warning("DOC format has limited support. For best results, consider converting to DOCX or PDF.")
-        try:
-            # Attempt to process as DOCX (some DOC files can be read by python-docx)
-            return extract_text_from_docx(file_bytes)
-        except Exception as e:
-            st.error(f"Error processing DOC file: {e}")
-            return "Error processing DOC file. Please convert to DOCX or PDF for better results."
-    elif file_extension == 'txt':
-        return extract_text_from_txt(file_bytes)
+def input_pdf_setup(uploaded_file):
+    if uploaded_file is not None:
+        document = fitz.open(stream=uploaded_file.read(), filetype="pdf")
+        text_parts = []
+        for page in document:
+            text_parts.append(page.get_text())
+        pdf_text_content = " ".join(text_parts)
+        return pdf_text_content
     else:
-        raise ValueError(f"Unsupported file format: {file_extension}")
+        raise FileNotFoundError("No file uploaded")
 
 # Define all prompts at the top to ensure they are in scope
 input_prompt1 = """
@@ -85,7 +48,7 @@ Role: Advanced AI for Technical Recruitment
 Task: Generate evaluation questions based on the provided job description and resume.
 Objective: Create technical and coding questions tailored to the JD and resume, sequenced from project start to finish.
 Instructions:
-1. Input: A job description (JD) detailing the role's requirements, skills, and responsibilities, and a resume extracted from a PDF outlining the candidate's skills, experience, and projects.
+1. Input: A job description (JD) detailing the role’s requirements, skills, and responsibilities, and a resume extracted from a PDF outlining the candidate’s skills, experience, and projects.
 2. Process: Analyze the JD and resume to generate up to 10 questions (5 Technical, 5 Coding) in project lifecycle order (requirements gathering, design, development, testing, deployment). Base the questions on the skills, tools, and experiences mentioned in the JD and resume.
 3. Output: For each question, provide:
    - Category: "Technical Question" or "Coding Question".
@@ -142,7 +105,7 @@ Objective: Analyze the provided resume to determine the match status of user-spe
 Instructions:
 1. Input: You will receive two pieces of input:
    - A list of top skills provided as a comma-separated string (e.g., "SQL, Python, Pyspark") passed as additional input.
-   - A resume extracted from a file, provided as text content, detailing the candidate's skills, experience, projects, and qualifications.
+   - A resume extracted from a PDF file, provided as text content, detailing the candidate’s skills, experience, projects, and qualifications.
 
 2. Process: For each skill in the provided top_skills list:
    - Check if the skill is explicitly mentioned or implied in the resume (e.g., through job titles, tools used, projects, certifications, or keywords).
@@ -157,9 +120,20 @@ Instructions:
 
 4. Additional Notes:
    - Use only the skills provided in the top_skills input; do not prompt for additional input or reference the job description (JD).
-   - Handle resume text noise (e.g., file extraction artifacts) by focusing on key terms and context.
+   - Handle resume text noise (e.g., PDF extraction artifacts) by focusing on key terms and context.
    - If experience duration is unclear, make reasonable assumptions (e.g., "1 year" for junior roles, "3 years" for mid-level).
    - Ensure output is concise, professional, and suitable for Streamlit display.
+
+Example:
+If top_skills are "SQL, Python, Pyspark" and the resume mentions "3 years of Python in Data Science Project" and "1 year of SQL in Database Project," but no Pyspark, the output table should be:
+
+| Skill   | Match Status | Relevant Projects         | Years of Experience |
+|---------|--------------|---------------------------|---------------------|
+| SQL     | Yes          | Database Project          | 1 year             |
+| Python  | Yes          | Data Science Project      | 3 years            |
+| Pyspark | No           | None                      | 0 years            |
+
+Now, analyze the provided top_skills and resume content to generate the skill analysis table.
 """
 
 input_prompt_query = """
@@ -181,14 +155,10 @@ st.subheader('This Application helps you to understand the Job Description and e
 input_text = st.text_input("Job Description: ", key="input_jd")
 submit_jd_summarization = st.button("JD Summarization", key="submit_jd_summarization")
 
-# Update file uploader to accept multiple file formats
-uploaded_file = st.file_uploader("Upload your Resume (PDF, DOCX, DOC, TXT)...", 
-                                 type=["pdf", "docx", "doc", "txt"], 
-                                 key="resume_uploader")
-resume_content = ""
+uploaded_file = st.file_uploader("Upload your Resume(PDF)...", type=["pdf"], key="pdf_uploader")
+pdf_content = ""
 if uploaded_file is not None:
-    file_type = uploaded_file.name.split('.')[-1].upper()
-    st.write(f"{file_type} Resume Uploaded Successfully")
+    st.write("PDF Uploaded Successfully")
 
 submit_recruiter = st.button("Technical Recruiter Analysis", key="submit_recruiter")
 submit_questions = st.button("Technical Questions", key="submit_questions")
@@ -203,78 +173,57 @@ submit_general_query = st.button("Answer My Query", key="submit_general_query")
 
 if submit_recruiter:
     if uploaded_file is not None and input_text:
-        try:
-            resume_content = process_resume_file(uploaded_file)
-            response = get_gemini_response(input_text, resume_content, input_prompt1)
-            st.subheader("Technical Recruiter Analysis")
-            st.write(response)
-        except Exception as e:
-            st.error(f"Error processing file: {e}")
+        pdf_content = input_pdf_setup(uploaded_file)
+        response = get_gemini_response(input_text, pdf_content, input_prompt1)
+        st.subheader("Technical Recruiter Analysis")
+        st.write(response)
     else:
-        st.write("Please upload a resume file and enter a Job Description to proceed.")
+        st.write("Please upload a PDF and enter a Job Description to proceed.")
 
 elif submit_questions:
     if uploaded_file is not None and input_text:
-        try:
-            resume_content = process_resume_file(uploaded_file)
-            response = get_gemini_response(input_text, resume_content, input_prompt2)
-            st.subheader("Technical Questions")
-            st.write(response)
-        except Exception as e:
-            st.error(f"Error processing file: {e}")
+        pdf_content = input_pdf_setup(uploaded_file)
+        response = get_gemini_response(input_text, pdf_content, input_prompt2)
+        st.subheader("Technical Questions")
+        st.write(response)
     else:
-        st.write("Please upload a resume file and enter a Job Description to proceed.")
+        st.write("Please upload a PDF and enter a Job Description to proceed.")
 
 elif submit_domain:
     if uploaded_file is not None and input_text:
-        try:
-            resume_content = process_resume_file(uploaded_file)
-            response = get_gemini_response(input_text, resume_content, input_prompt3)
-            st.subheader("Domain Expert Analysis")
-            st.write(response)
-        except Exception as e:
-            st.error(f"Error processing file: {e}")
+        pdf_content = input_pdf_setup(uploaded_file)
+        response = get_gemini_response(input_text, pdf_content, input_prompt3)
+        st.subheader("Domain Expert Analysis")
+        st.write(response)
     else:
-        st.write("Please upload a resume file and enter a Job Description to proceed.")
+        st.write("Please upload a PDF and enter a Job Description to proceed.")
 
 elif submit_manager:
     if uploaded_file is not None and input_text:
-        try:
-            resume_content = process_resume_file(uploaded_file)
-            response = get_gemini_response(input_text, resume_content, input_prompt4)
-            st.subheader("Technical Manager Analysis")
-            st.write(response)
-        except Exception as e:
-            st.error(f"Error processing file: {e}")
+        pdf_content = input_pdf_setup(uploaded_file)
+        response = get_gemini_response(input_text, pdf_content, input_prompt4)
+        st.subheader("Technical Manager Analysis")
+        st.write(response)
     else:
-        st.write("Please upload a resume file and enter a Job Description to proceed.")
+        st.write("Please upload a PDF and enter a Job Description to proceed.")
 
 elif submit_general_query:
     if uploaded_file is not None or input_text:
-        try:
-            resume_content = process_resume_file(uploaded_file) if uploaded_file is not None else ""
-            response = get_gemini_response(input_text, resume_content, input_prompt_query, input_promp)
-            st.subheader("Query Response")
-            st.write(response)
-        except Exception as e:
-            if "No file uploaded" not in str(e):
-                st.error(f"Error processing file: {e}")
-            else:
-                st.write("Please upload a resume file or enter a Job Description to proceed.")
+        pdf_content = input_pdf_setup(uploaded_file) if uploaded_file is not None else ""
+        response = get_gemini_response(input_text, pdf_content, input_prompt_query, input_promp)
+        st.subheader("Query Response")
+        st.write(response)
     else:
-        st.write("Please upload a resume file or enter a Job Description to proceed.")
+        st.write("Please upload a PDF or enter a Job Description to proceed.")
 
 elif submit_skill_analysis:
     if uploaded_file is not None and top_skills:
-        try:
-            resume_content = process_resume_file(uploaded_file)
-            response = get_gemini_response("", resume_content, input_prompt6, top_skills)
-            st.subheader("Top Skill Analysis")
-            st.write(response)
-        except Exception as e:
-            st.error(f"Error processing file: {e}")
+        pdf_content = input_pdf_setup(uploaded_file)
+        response = get_gemini_response("", pdf_content, input_prompt6, top_skills)
+        st.subheader("Top Skill Analysis")
+        st.write(response)
     else:
-        st.write("Please upload a resume file and enter Top Skills to proceed.")
+        st.write("Please upload a PDF and enter Top Skills to proceed.")
 
 elif submit_jd_summarization:
     if input_text:
@@ -283,3 +232,5 @@ elif submit_jd_summarization:
         st.write(response)
     else:
         st.write("Please enter a Job Description to proceed.")
+else:
+        st.write("Please upload a PDF or enter a Job Description to proceed.")
