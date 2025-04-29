@@ -181,6 +181,23 @@ Instructions:
 3. If query is unclear, ask for clarification.
 """
 
+input_prompt_jd_clarification = """
+Role: Technical Recruitment Consultant
+Task: Provide clarifications on the job description based on user queries.
+Objective: Help the hiring manager understand the technical aspects of the job description by answering specific questions.
+Instructions:
+1. Input: A job description (JD) detailing the role's requirements, skills, and responsibilities, and a user query (e.g., "What does 'experience with distributed systems' mean in this JD?").
+2. Process: Analyze the JD and the user query to provide a clear, technical, and context-aware response. Focus on explaining technical terms, skills, tools, or responsibilities mentioned in the JD in a way that is understandable to a hiring manager.
+3. Output: 
+   - A concise response (1-2 paragraphs) addressing the query, providing technical details, and relating the answer to the JD's context.
+   - If applicable, include examples or practical implications (e.g., "Experience with distributed systems means the candidate should have worked with tools like Apache Kafka or Hadoop to manage large-scale data processing.").
+   - If the query is unclear or not relevant to the JD, politely ask for clarification (e.g., "Could you specify which part of the JD you'd like clarified?").
+4. Additional Notes:
+   - Avoid referencing the resume unless explicitly mentioned in the query.
+   - Ensure responses are professional, technical, and suitable for a hiring manager who may not have deep technical expertise.
+   - Keep the tone helpful and educational, focusing on enabling better understanding of the JD.
+"""
+
 # Streamlit App
 st.set_page_config(page_title="Resume Expert")
 
@@ -188,7 +205,17 @@ st.header("TEKsystems JobFit Analyzer")
 st.subheader('This Application helps you to understand the Job Description and evaluate the Resume')
 
 input_text = st.text_input("Job Description: ", key="input_jd")
-submit_jd_summarization = st.button("JD Summarization", key="submit_jd_summarization")
+
+# Create two columns for JD-related buttons
+col1, col2 = st.columns(2)
+with col1:
+    submit_jd_summarization = st.button("JD Summarization", key="submit_jd_summarization")
+with col2:
+    submit_jd_clarification = st.button("JD Clarifications", key="submit_jd_clarification")
+
+# Conditional input for JD clarification query
+if submit_jd_clarification:
+    jd_clarification_query = st.text_input("Enter your JD clarification query:", key="jd_clarification_query")
 
 uploaded_file = st.file_uploader("Upload your Resume (PDF, DOCX, DOC, TXT)...", 
                                  type=["pdf", "docx", "doc", "txt"], 
@@ -304,3 +331,14 @@ elif submit_jd_summarization:
         st.write(response)
     else:
         st.write("Please enter a Job Description to proceed.")
+
+elif submit_jd_clarification:
+    if input_text and 'jd_clarification_query' in st.session_state and st.session_state.jd_clarification_query:
+        try:
+            response = get_gemini_response(input_text, "", input_prompt_jd_clarification, st.session_state.jd_clarification_query)
+            st.subheader("JD Clarification Response")
+            st.write(response)
+        except Exception as e:
+            st.error(f"Error processing query: {e}")
+    else:
+        st.write("Please enter a Job Description and a clarification query to proceed.")
