@@ -97,7 +97,7 @@ Additional Notes:
 
 input_prompt_coding = """
 Role: Advanced AI for Technical Recruitment
-Task: Generate coding questions based on the provided job description and resume.
+Task: Generate coding questions based on Lagrangianally based on the provided job description and resume.
 Objective: Create coding questions tailored to the JD and resume, sequenced from project start to finish.
 Instructions:
 1. Input: A job description (JD) detailing the role's requirements, skills, and responsibilities, and a resume extracted from a PDF outlining the candidate's skills, experience, and projects.
@@ -183,19 +183,23 @@ Instructions:
 
 input_prompt_jd_clarification = """
 Role: Technical Recruitment Consultant
-Task: Provide clarifications on the job description based on user queries.
-Objective: Help the hiring manager understand the technical aspects of the job description by answering specific questions.
+Task: Generate a list of technical questions to ask the hiring manager to clarify the job description.
+Objective: Help the recruiter understand the technical requirements, tools, and expectations of the role to source the right candidate.
 Instructions:
-1. Input: A job description (JD) detailing the role's requirements, skills, and responsibilities, and a user query (e.g., "What does 'experience with distributed systems' mean in this JD?").
-2. Process: Analyze the JD and the user query to provide a clear, technical, and context-aware response. Focus on explaining technical terms, skills, tools, or responsibilities mentioned in the JD in a way that is understandable to a hiring manager.
+1. Input: A job description (JD) detailing the role's requirements, skills, and responsibilities.
+2. Process: Analyze the JD to identify ambiguous, technical, or critical aspects that need clarification (e.g., specific tools, expertise levels, project scope). Generate 5–10 technical questions that a recruiter can ask the hiring manager to gain deeper insights into the role’s requirements.
 3. Output: 
-   - A concise response (1-2 paragraphs) addressing the query, providing technical details, and relating the answer to the JD's context.
-   - If applicable, include examples or practical implications (e.g., "Experience with distributed systems means the candidate should have worked with tools like Apache Kafka or Hadoop to manage large-scale data processing.").
-   - If the query is unclear or not relevant to the JD, politely ask for clarification (e.g., "Could you specify which part of the JD you'd like clarified?").
+   - A numbered list of 5–10 questions, each:
+     - Focused on technical skills, tools, role responsibilities, or project context.
+     - Specific to the JD’s content (e.g., if "cloud computing" is mentioned, ask about preferred platforms like AWS or Azure).
+     - Designed to elicit detailed responses (e.g., "What specific cloud platforms should the candidate have experience with, and what types of tasks will they perform?").
+   - Ensure questions cover a range of areas (e.g., tools, expertise level, project scope, team dynamics).
 4. Additional Notes:
-   - Avoid referencing the resume unless explicitly mentioned in the query.
-   - Ensure responses are professional, technical, and suitable for a hiring manager who may not have deep technical expertise.
-   - Keep the tone helpful and educational, focusing on enabling better understanding of the JD.
+   - Do not reference or require a resume; focus solely on the JD.
+   - Avoid generic questions; tailor questions to the JD’s specific skills, tools, or responsibilities.
+   - Ensure questions are professional, clear, and suitable for a recruiter to ask a hiring manager.
+   - Maintain a balance of question types (e.g., about skills, projects, and expectations).
+   - Format the output as a clean, numbered list for display in a Streamlit app.
 """
 
 # Streamlit App
@@ -212,10 +216,6 @@ with col1:
     submit_jd_summarization = st.button("JD Summarization", key="submit_jd_summarization")
 with col2:
     submit_jd_clarification = st.button("JD Clarifications", key="submit_jd_clarification")
-
-# Conditional input for JD clarification query
-if submit_jd_clarification:
-    jd_clarification_query = st.text_input("Enter your JD clarification query:", key="jd_clarification_query")
 
 uploaded_file = st.file_uploader("Upload your Resume (PDF, DOCX, DOC, TXT)...", 
                                  type=["pdf", "docx", "doc", "txt"], 
@@ -259,7 +259,7 @@ elif submit_technical_questions:
         except Exception as e:
             st.error(f"Error processing file: {e}")
     else:
-        st.write("Please upload a resume file and enter a Job Description to proceed.")
+        st.write("Please upload a resume file and enter a Job Description to Proceed.")
 
 elif submit_coding_questions:
     if uploaded_file is not None and input_text:
@@ -333,12 +333,12 @@ elif submit_jd_summarization:
         st.write("Please enter a Job Description to proceed.")
 
 elif submit_jd_clarification:
-    if input_text and 'jd_clarification_query' in st.session_state and st.session_state.jd_clarification_query:
+    if input_text:
         try:
-            response = get_gemini_response(input_text, "", input_prompt_jd_clarification, st.session_state.jd_clarification_query)
-            st.subheader("JD Clarification Response")
+            response = get_gemini_response(input_text, "", input_prompt_jd_clarification)
+            st.subheader("JD Clarification Questions")
             st.write(response)
         except Exception as e:
-            st.error(f"Error processing query: {e}")
+            st.error(f"Error processing request: {e}")
     else:
-        st.write("Please enter a Job Description and a clarification query to proceed.")
+        st.write("Please enter a Job Description to proceed.")
