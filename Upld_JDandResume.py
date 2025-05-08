@@ -213,6 +213,8 @@ st.header("TEKsystems JobFit Analyzer")
 st.subheader('This Application helps you to understand the Job Description and evaluate the Resume')
 
 uploaded_jd = st.file_uploader("Upload the Job Description (PDF, DOCX, DOC, TXT)...", type=["pdf", "docx", "doc", "txt"], key="jd_uploader")
+submit_jd_summarization = st.button("JD Summarization", key="submit_jd_summarization")
+submit_jd_clarification = st.button("JD Clarification Questions", key="submit_jd_clarification")
 uploaded_resume = st.file_uploader("Upload your Resume (PDF, DOCX, DOC, TXT)...", type=["pdf", "docx", "doc", "txt"], key="resume_uploader")
 
 jd_content = ""
@@ -233,8 +235,6 @@ submit_technical_questions = st.button("Technical Questions", key="submit_techni
 submit_coding_questions = st.button("Coding Questions", key="submit_coding_questions")
 submit_domain = st.button("Domain Expert Analysis", key="submit_domain")
 submit_manager = st.button("Technical Manager Analysis", key="submit_manager")
-submit_jd_summarization = st.button("JD Summarization", key="submit_jd_summarization")
-submit_jd_clarification = st.button("JD Clarification Questions", key="submit_jd_clarification")
 top_skills = st.text_input("Top Skills Required for the Job (comma-separated):", key="top_skills_input")
 submit_skill_analysis = st.button("Skill Analysis", key="submit_skill_analysis")
 input_promp = st.text_input("Queries: Feel Free to Ask here", key="custom_query_input")
