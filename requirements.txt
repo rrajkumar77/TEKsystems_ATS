@@ -2,13 +2,9 @@ streamlit
 requests
 PyPDF2
 python-dotenv
-
-streamlit
-PyPDF2
 google-generativeai
 python-dotenv
-PyMuPDF
 fitz
 langchain-experimental
 python-docx
-pymupdf
+PyMuPDF==1.22.3  # Use a specific stable version
