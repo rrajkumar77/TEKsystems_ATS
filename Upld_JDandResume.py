@@ -1,7 +1,9 @@
 import streamlit as st
 import google.generativeai as genai
 import os
-import fitz # PyMuPDF for PDF processing
+#import fitz # PyMuPDF for PDF processing
+import pymupdf
+fitz = pymupdf
 import docx # python-docx for DOCX processing
 import io
 from dotenv import load_dotenv
