@@ -1,9 +1,7 @@
 import streamlit as st
 import google.generativeai as genai
 import os
-#import fitz # PyMuPDF for PDF processing
-import pymupdf
-fitz = pymupdf
+import fitz # PyMuPDF for PDF processing
 import docx # python-docx for DOCX processing
 import io
 from dotenv import load_dotenv
@@ -179,6 +177,11 @@ Task: Answer user queries about JD or resume.
 Objective: Provide detailed, context-aware responses.
 Instructions:
 1. Input: JD, resume, and user query (e.g., "What skills are missing?").
+2. Output: Clear response summarizing or comparing JD/resume,
+
+Objective: Provide detailed, context-aware responses.
+Instructions:
+1. Input: JD, resume, and user query (e.g., "What skills are missing?").
 2. Output: Clear response summarizing or comparing JD/resume, with insights (e.g., "Resume lacks Machine Learning; suggest certification").
 3. If query is unclear, ask for clarification.
 """
@@ -230,6 +233,8 @@ submit_technical_questions = st.button("Technical Questions", key="submit_techni
 submit_coding_questions = st.button("Coding Questions", key="submit_coding_questions")
 submit_domain = st.button("Domain Expert Analysis", key="submit_domain")
 submit_manager = st.button("Technical Manager Analysis", key="submit_manager")
+submit_jd_summarization = st.button("JD Summarization", key="submit_jd_summarization")
+submit_jd_clarification = st.button("JD Clarification Questions", key="submit_jd_clarification")
 top_skills = st.text_input("Top Skills Required for the Job (comma-separated):", key="top_skills_input")
 submit_skill_analysis = st.button("Skill Analysis", key="submit_skill_analysis")
 input_promp = st.text_input("Queries: Feel Free to Ask here", key="custom_query_input")
@@ -266,7 +271,7 @@ elif submit_coding_questions:
     else:
         st.write("Please upload both a job description and a resume to proceed.")
 elif submit_domain:
-    if jd_content and resume_content:
+    if JD_content and resume_content:
         try:
             response = get_gemini_response(jd_content, resume_content, input_prompt3)
             st.subheader("Domain Expert Analysis")
@@ -285,6 +290,37 @@ elif submit_manager:
             st.error(f"Error processing file: {e}")
     else:
         st.write("Please upload both a job description and a resume to proceed.")
+elif submit_jd_summarization:
+    if jd_content:
+        try:
+            response = get_gemini_response(jd_content, "", input_prompt5)
+            st.subheader("Job Description Summary")
+            st.write(response)
+        except Exception as e:
+            st.error(f"Error processing request: {e}")
+    else:
+        st.write("Please upload a job description to proceed.")
+elif submit_jd_clarification:
+    if jd_content:
+        try:
+            response = get_gemini_response(jd_content, "", input_prompt_jd_clarification)
+            st.subheader("JD Clarification Questions")
+            st.write(response)
+        except Exception as e:
+            st.error(f"Error processing request: {e}")
+    else:
+        st.write("Please upload a job description to proceed.")
+elif submit_skill_analysis:
+    if uploaded_resume is not None and top_skills:
+        try:
+            resume_content = process_file(uploaded_resume)
+            response = get_gemini_response("", resume_content, input_prompt6, top_skills)
+            st.subheader("Top Skill Analysis")
+            st.write(response)
+        except Exception as e:
+            st.error(f"Error processing file: {e}")
+    else:
+        st.write("Please upload a resume file and enter Top Skills to proceed.")
 elif submit_general_query:
     if jd_content or resume_content:
         try:
@@ -299,31 +335,3 @@ elif submit_general_query:
                 st.write("Please upload a resume file or enter a Job Description to proceed.")
     else:
         st.write("Please upload a resume file or enter a Job Description to proceed.")
-elif submit_skill_analysis:
-    if uploaded_resume is not None and top_skills:
-        try:
-            resume_content = process_file(uploaded_resume)
-            response = get_gemini_response("", resume_content, input_prompt6, top_skills)
-            st.subheader("Top Skill Analysis")
-            st.write(response)
-        except Exception as e:
-            st.error(f"Error processing file: {e}")
-    else:
-        st.write("Please upload a resume file and enter Top Skills to proceed.")
-elif submit_jd_summarization:
-    if jd_content:
-        response = get_gemini_response(jd_content, "", input_prompt5)
-        st.subheader("Job Description Summary")
-        st.write(response)
-    else:
-        st.write("Please upload a job description to proceed.")
-elif submit_jd_clarification:
-    if jd_content:
-        try:
-            response = get_gemini_response(jd_content, "", input_prompt_jd_clarification)
-            st.subheader("JD Clarification Questions")
-            st.write(response)
-        except Exception as e:
-            st.error(f"Error processing request: {e}")
-    else:
-        st.write("Please upload a job description to proceed.")
