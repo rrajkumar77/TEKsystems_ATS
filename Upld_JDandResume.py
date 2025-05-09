@@ -271,7 +271,7 @@ elif submit_coding_questions:
     else:
         st.write("Please upload both a job description and a resume to proceed.")
 elif submit_domain:
-    if JD_content and resume_content:
+    if Jd_content and resume_content:
         try:
             response = get_gemini_response(jd_content, resume_content, input_prompt3)
             st.subheader("Domain Expert Analysis")
