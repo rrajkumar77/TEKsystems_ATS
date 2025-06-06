@@ -25,11 +25,13 @@ def extract_project_updates(uploaded_file):
         
         formatted_update = f"""
         <div style="background-color:#F6F5F5; padding:15px; border-radius:8px; margin-bottom:15px; border-left:4px solid #007698;">
-            <p><strong style="color:#021A2A; font-size:16px;">Project Name:</strong> {project_name}</p>
-            <p><strong style="color:#0095D3;">Goals:</strong> {goals}</p>
-            <p><strong style="color:#CDDC00;">Tech Skills:</strong> {tech_skills}</p>
-            <p><strong style="color:#44D7F4;">Key Achievements:</strong> {achievements}</p>
-            <p><strong style="color:#F9671D;">Value Delivered:</strong> {value_delivered}</p>
+            <ul style="list-style-type:none; padding-left:0; margin:0;">
+                <li><strong style="color:#021A2A;">Project Name:</strong> {project_name}</li>
+                <li><strong style="color:#0095D3;">Goals:</strong> {goals}</li>
+                <li><strong style="color:#CDDC00;">Tech Skills:</strong> {tech_skills}</li>
+                <li><strong style="color:#44D7F4;">Key Achievements:</strong> {achievements}</li>
+                <li><strong style="color:#F9671D;">Value Delivered:</strong> {value_delivered}</li>
+            </ul>
         </div>
         """
         formatted_updates.append(formatted_update)
