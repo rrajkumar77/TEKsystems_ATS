@@ -6,7 +6,7 @@ def extract_project_updates(uploaded_file):
     df = pd.read_csv(uploaded_file, encoding='utf-8')
     
     # Check if the required columns are present in the DataFrame
-    required_columns = ['Project_Name', 'Project_Description', 'Acheivements_ValueAdds', 'Value_Add']
+    required_columns = ['Project_Name', 'Project_Description', 'Project_Brief_Skill', 'Acheivements_ValueAdds', 'Value_Add']
     for col in required_columns:
         if col not in df.columns:
             st.error(f"Column '{col}' is missing from the uploaded file.")
@@ -16,23 +16,20 @@ def extract_project_updates(uploaded_file):
     
     formatted_updates = []
     for index, row in project_updates.iterrows():
-        achievements = str(row['Acheivements_ValueAdds']).replace(';', '.</li>\n<li>') if pd.notnull(row['Acheivements_ValueAdds']) else ''
-        value_add = str(row['Value_Add']).replace(';', '.</li>\n<li>') if pd.notnull(row['Value_Add']) else ''
+        # Clean and format the data
+        project_name = str(row['Project_Name']) if pd.notnull(row['Project_Name']) else 'N/A'
+        goals = str(row['Project_Description']) if pd.notnull(row['Project_Description']) else 'N/A'
+        tech_skills = str(row['Project_Brief_Skill']) if pd.notnull(row['Project_Brief_Skill']) else 'N/A'
+        achievements = str(row['Acheivements_ValueAdds']) if pd.notnull(row['Acheivements_ValueAdds']) else 'N/A'
+        value_delivered = str(row['Value_Add']) if pd.notnull(row['Value_Add']) else 'N/A'
         
         formatted_update = f"""
         <div style="background-color:#F6F5F5; padding:15px; border-radius:8px; margin-bottom:15px; border-left:4px solid #007698;">
-            <h3 style="color:#021A2A; margin-top:0; font-size:20px;">{row['Project_Name']}</h3>
-            <p><strong style="color:#0095D3;">Project Description:</strong> {row['Project_Description']}</p>
-            <br>
-            <p><strong style="color:#44D7F4;">Achievements/Value Adds:</strong></p>
-            <ul style="color:#333; margin-left:20px;">
-                <li>{achievements}</li>
-            </ul>
-            <br>
-            <p><strong style="color:#F9671D;">Value Add:</strong></p>
-            <ul style="color:#333; margin-left:20px;">
-                <li>{value_add}</li>
-            </ul>
+            <p><strong style="color:#021A2A; font-size:16px;">Project Name:</strong> {project_name}</p>
+            <p><strong style="color:#0095D3;">Goals:</strong> {goals}</p>
+            <p><strong style="color:#CDDC00;">Tech Skills:</strong> {tech_skills}</p>
+            <p><strong style="color:#44D7F4;">Key Achievements:</strong> {achievements}</p>
+            <p><strong style="color:#F9671D;">Value Delivered:</strong> {value_delivered}</p>
         </div>
         """
         formatted_updates.append(formatted_update)
@@ -40,9 +37,9 @@ def extract_project_updates(uploaded_file):
     return formatted_updates
 
 # Streamlit App
-st.set_page_config(page_title="Project Update for Sales", page_icon="📊")
-st.header("📊 Project Update for Sales")
-st.subheader('This Application helps you to summarise project updates from uploaded documents')
+st.set_page_config(page_title="Project Update Analyzer", page_icon="📊")
+st.header("📊 Project Update Analyzer")
+st.subheader('This Application helps you to analyze project updates from uploaded documents')
 
 # Add instructions for PowerPoint copying
 st.info("💡 **Tip for PowerPoint:** After processing, you can copy the formatted project updates below and paste them directly into your PowerPoint slides.")
