@@ -1,54 +1,67 @@
 import streamlit as st
 import pandas as pd
-from io import StringIO
+import google.generativeai as genai
+import os
+from dotenv import load_dotenv
 
-def extract_project_updates(uploaded_file):
-    df = pd.read_csv(uploaded_file, encoding='utf-8')
-    
-    # Check if the required columns are present in the DataFrame
-    required_columns = ['Team_Lead', 'Project_Name', 'Project_Description', 'Acheivements_ValueAdds', 'Value_Add']
-    for col in required_columns:
-        if col not in df.columns:
-            st.error(f"Column '{col}' is missing from the uploaded file.")
-            return []
-    
-    project_updates = df[required_columns]
-    
-    formatted_updates = []
-    for index, row in project_updates.iterrows():
-        achievements = str(row['Acheivements_ValueAdds']).replace(';', '.</li>\n<li>') if pd.notnull(row['Acheivements_ValueAdds']) else ''
-        value_add = str(row['Value_Add']).replace(';', '.</li>\n<li>') if pd.notnull(row['Value_Add']) else ''
-        
-        formatted_update = f"""
-        <div style="background-color:#F6F5F5; padding:10px; border-radius:5px; margin-bottom:10px;">
-            <h3 style="color:#021A2A;">{row['Project_Name']}</h3>
-            <p><strong style="color:#CDDC00;">Lead Name:</strong> {row['Team_Lead']}</p>
-            <br>
-            <p><strong style="color:#0095D3;">Project Description:</strong> {row['Project_Description']}</p>
-            <br>
-            <p><strong style="color:#44D7F4;">Achievements/Value Adds:</strong></p>
-            <ul style="color:#333;">
-                <li>{achievements}</li>
-            </ul>
-            <br>
-            <p><strong style="color:#F9671D;">Value Add:</strong></p>
-            <ul style="color:#333;">
-                <li>{value_add}</li>
-            </ul>
-        </div>
-        """
-        formatted_updates.append(formatted_update)
-    
-    return formatted_updates
+# Load environment
+load_dotenv()
+api_key = os.getenv("GOOGLE_API_KEY")
 
-# Streamlit App
-st.set_page_config(page_title="Document Analyser")
-st.header("Document Analyzer")
-st.subheader('This Application helps you to Analyse any document uploaded')
-uploaded_file = st.file_uploader("Upload your Document (CSV only)...", type=["csv"])
+if not api_key:
+    st.error("❌ GOOGLE_API_KEY not set in your .env file.")
+else:
+    genai.configure(api_key=api_key)
+
+# Format summary with brand colors
+def format_summary(project_name, summary_html):
+    return f"""
+    <div style="background-color:#F5F5F5; padding: 20px; border-radius: 12px; margin-bottom: 25px;">
+        <h3 style="color:#012A52; font-family:sans-serif;">{project_name}</h3>
+        <div style="color:#00798B; font-size: 16px; font-family:sans-serif;">{summary_html}</div>
+    </div>
+    """
+
+# Generate summary using Gemini
+def get_project_summary(text):
+    try:
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        prompt = (
+            "Summarize this employee's QBR project in 4-5 concise bullet points using <ul><li> HTML tags. "
+            "Include project name, goals, tech skills used, key achievements, and value delivered:"
+        )
+        response = model.generate_content([prompt + "\n\n" + text])
+        return response.text
+    except Exception as e:
+        return f"<p style='color:red;'>Error: {str(e)}</p>"
+
+# Streamlit UI
+st.set_page_config(page_title="QBR Summary Generator", layout="centered")
+st.title("📊 QBR Project Summary Generator")
+
+uploaded_file = st.file_uploader("Upload the QBR CSV file", type=["csv"])
+
 if uploaded_file is not None:
-    st.write("Document Uploaded Successfully")
-    project_updates = extract_project_updates(uploaded_file)
-    st.subheader("Project Updates")
-    for update in project_updates:
-        st.markdown(update, unsafe_allow_html=True)
+    df = pd.read_csv(uploaded_file)
+    st.success("✅ File uploaded!")
+
+    for idx, row in df.iterrows():
+        employee_name = row.get("Created By", "N/A")
+        team_lead = row.get("Team_Lead", "")
+        project_name = row.get("Project_Name", "")
+        project_desc = row.get("Project_Description", "")
+        achievements = row.get("Acheivements_ValueAdds", "")
+        value_add = row.get("Value_Add", "")
+
+        combined_text = f"""
+        Title: {employee_name}
+        Team Lead: {team_lead}
+        Project Name: {project_name}
+        Project Description: {project_desc}
+        Achievements: {achievements}
+        Value Add: {value_add}
+        """
+
+        summary_html = get_project_summary(combined_text)
+        formatted_output = format_summary(project_name, summary_html)
+        st.markdown(formatted_output, unsafe_allow_html=True)
