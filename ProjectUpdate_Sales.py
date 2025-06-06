@@ -24,14 +24,14 @@ def extract_project_updates(uploaded_file):
         value_delivered = str(row['Value_Add']) if pd.notnull(row['Value_Add']) else 'N/A'
         
         formatted_update = f"""
-        <div style="background-color:#F6F5F5; padding:15px; border-radius:8px; margin-bottom:15px; border-left:4px solid #007698;">
-            <ul style="list-style-type:none; padding-left:0; margin:0;">
-                <li><strong style="color:#021A2A;">Project Name:</strong> {project_name}</li>
-                <li><strong style="color:#0095D3;">Goals:</strong> {goals}</li>
-                <li><strong style="color:#CDDC00;">Tech Skills:</strong> {tech_skills}</li>
-                <li><strong style="color:#44D7F4;">Key Achievements:</strong> {achievements}</li>
-                <li><strong style="color:#F9671D;">Value Delivered:</strong> {value_delivered}</li>
-            </ul>
+        <div style="background-color:#F8F9FA; padding:10px; border-radius:5px; margin-bottom:10px; border-left:3px solid #007698;">
+            <p style="margin:0; line-height:1.4; font-size:14px;">
+                <strong style="color:#021A2A;">{project_name}</strong><br>
+                <strong>Goals:</strong> {goals}<br>
+                <strong>Skills:</strong> {tech_skills}<br>
+                <strong>Achievements:</strong> {achievements}<br>
+                <strong>Value:</strong> {value_delivered}
+            </p>
         </div>
         """
         formatted_updates.append(formatted_update)
