@@ -28,7 +28,7 @@ def get_project_summary(text):
         model = genai.GenerativeModel("gemini-1.5-flash")
         prompt = (
             "Summarize this employee's QBR project in 4-5 concise bullet points using <ul><li> HTML tags. "
-            "Include project name, goals, tech skills used, key achievements, and value delivered:"
+            "Include goals, tech skills used, key achievements, and value delivered:"
         )
         response = model.generate_content([prompt + "\n\n" + text])
         return response.text
