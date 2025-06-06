@@ -37,7 +37,7 @@ def get_project_summary(text):
 
 # Streamlit UI
 st.set_page_config(page_title="QBR Summary Generator", layout="centered")
-st.title("📊 QBR Project Summary Generator")
+st.title("📊 Project Summary for Sales")
 
 uploaded_file = st.file_uploader("Upload the QBR CSV file", type=["csv"])
 
