@@ -46,70 +46,99 @@ def get_project_summary(consolidated_text):
 
 # Consolidate project entries
 def consolidate_projects(filtered_df):
+    # Group by project name (case-insensitive and trimmed)
     project_groups = defaultdict(list)
     
-    # Group by project name
     for idx, row in filtered_df.iterrows():
-        project_name = row.get("Project_Name", "").strip()
-        if project_name:
-            project_groups[project_name].append(row)
+        project_name = str(row.get("Project_Name", "")).strip()
+        if project_name and project_name.lower() != 'nan':
+            # Use lowercase for grouping to handle case variations
+            project_key = project_name.lower().strip()
+            project_groups[project_key].append({
+                'original_name': project_name,
+                'row': row
+            })
     
     consolidated_projects = {}
     
-    for project_name, entries in project_groups.items():
+    for project_key, entries in project_groups.items():
+        if not entries:
+            continue
+            
+        # Use the first occurrence's name as the display name
+        display_name = entries[0]['original_name']
+        
         # Consolidate all information for this project
-        all_descriptions = []
-        all_achievements = []
-        all_value_adds = []
-        all_skills = []
+        all_descriptions = set()
+        all_achievements = set()
+        all_value_adds = set()
+        all_skills = set()
+        all_problem_statements = set()
         team_leads = set()
         business_units = set()
         employees = set()
         
-        for entry in entries:
-            # Collect unique information
-            if pd.notna(entry.get("Project_Description")) and entry.get("Project_Description").strip():
-                all_descriptions.append(entry.get("Project_Description").strip())
+        for entry_data in entries:
+            row = entry_data['row']
             
-            if pd.notna(entry.get("Acheivements_ValueAdds")) and entry.get("Acheivements_ValueAdds").strip():
-                all_achievements.append(entry.get("Acheivements_ValueAdds").strip())
+            # Collect unique information (non-null and non-empty)
+            desc = str(row.get("Project_Description", "")).strip()
+            if desc and desc.lower() not in ['nan', 'none', '']:
+                all_descriptions.add(desc)
             
-            if pd.notna(entry.get("Value_Add")) and entry.get("Value_Add").strip():
-                all_value_adds.append(entry.get("Value_Add").strip())
+            achievement = str(row.get("Acheivements_ValueAdds", "")).strip()
+            if achievement and achievement.lower() not in ['nan', 'none', '']:
+                all_achievements.add(achievement)
             
-            if pd.notna(entry.get("Project_Brief_Skill")) and entry.get("Project_Brief_Skill").strip():
-                all_skills.append(entry.get("Project_Brief_Skill").strip())
+            value_add = str(row.get("Value_Add", "")).strip()
+            if value_add and value_add.lower() not in ['nan', 'none', '']:
+                all_value_adds.add(value_add)
             
-            if pd.notna(entry.get("Team_Lead")) and entry.get("Team_Lead").strip():
-                team_leads.add(entry.get("Team_Lead").strip())
+            skill = str(row.get("Project_Brief_Skill", "")).strip()
+            if skill and skill.lower() not in ['nan', 'none', '']:
+                all_skills.add(skill)
+                
+            problem = str(row.get("Project_Problem_Statement", "")).strip()
+            if problem and problem.lower() not in ['nan', 'none', '']:
+                all_problem_statements.add(problem)
             
-            if pd.notna(entry.get("Business_Unit_Name")) and entry.get("Business_Unit_Name").strip():
-                business_units.add(entry.get("Business_Unit_Name").strip())
+            team_lead = str(row.get("Team_Lead", "")).strip()
+            if team_lead and team_lead.lower() not in ['nan', 'none', '']:
+                team_leads.add(team_lead)
             
-            if pd.notna(entry.get("Created By")) and entry.get("Created By").strip():
-                employees.add(entry.get("Created By").strip())
+            business_unit = str(row.get("Business_Unit_Name", "")).strip()
+            if business_unit and business_unit.lower() not in ['nan', 'none', '']:
+                business_units.add(business_unit)
+            
+            employee = str(row.get("Created By", "")).strip()
+            if employee and employee.lower() not in ['nan', 'none', '']:
+                employees.add(employee)
         
-        # Create consolidated text
+        # Create consolidated text with all unique information
         consolidated_text = f"""
-        Project Name: {project_name}
-        Business Units: {', '.join(business_units)}
-        Team Leads: {', '.join(team_leads)}
-        Employees: {', '.join(employees)}
+        Project Name: {display_name}
+        Number of Entries Consolidated: {len(entries)}
+        Business Units: {', '.join(sorted(business_units)) if business_units else 'Not specified'}
+        Team Leads: {', '.join(sorted(team_leads)) if team_leads else 'Not specified'}
+        Employees: {', '.join(sorted(employees)) if employees else 'Not specified'}
+        
+        Project Problem Statements:
+        {' | '.join(all_problem_statements) if all_problem_statements else 'Not specified'}
         
         Project Descriptions:
-        {' | '.join(set(all_descriptions))}
+        {' | '.join(all_descriptions) if all_descriptions else 'Not specified'}
         
-        Technical Skills:
-        {' | '.join(set(all_skills))}
+        Technical Skills Used:
+        {' | '.join(all_skills) if all_skills else 'Not specified'}
         
-        Achievements:
-        {' | '.join(set(all_achievements))}
+        Key Achievements:
+        {' | '.join(all_achievements) if all_achievements else 'Not specified'}
         
-        Value Adds:
-        {' | '.join(set(all_value_adds))}
+        Value Delivered:
+        {' | '.join(all_value_adds) if all_value_adds else 'Not specified'}
         """
         
-        consolidated_projects[project_name] = consolidated_text
+        consolidated_projects[display_name] = consolidated_text
     
     return consolidated_projects
 
@@ -182,11 +211,26 @@ if uploaded_file is not None:
                     if len(unique_projects) > 10:
                         st.write(f"• ... and {len(unique_projects) - 10} more")
             
+            # Show consolidation preview
+            with st.expander("🔄 Project Consolidation Preview", expanded=False):
+                project_counts = filtered_df['Project_Name'].value_counts()
+                duplicated_projects = project_counts[project_counts > 1]
+                
+                if len(duplicated_projects) > 0:
+                    st.write("**Projects with Multiple Entries (will be consolidated):**")
+                    for project, count in duplicated_projects.items():
+                        st.write(f"• {project}: {count} entries")
+                else:
+                    st.write("No duplicate projects found - each project has single entry")
+                
+                st.write(f"**Total unique projects:** {len(project_counts)}")
+            
             # Generate summaries button
             if st.button("🚀 Generate Project Summaries", type="primary"):
                 consolidated_projects = consolidate_projects(filtered_df)
                 
                 st.subheader("📝 Generated Summaries")
+                st.info(f"Consolidated {len(filtered_df)} entries into {len(consolidated_projects)} unique projects")
                 
                 # Progress bar
                 progress_bar = st.progress(0)
