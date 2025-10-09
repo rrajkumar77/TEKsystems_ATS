@@ -18,7 +18,7 @@ def get_gemini_response(input_jd, resume_content, prompt, additional_input=""):
     else:
         response = model.generate_content([input_jd, resume_content, prompt])
     return response.text
-
+'''
 def extract_text_from_pdf(file_bytes):
     """Extract text from PDF file"""
     document = fitz.open(stream=file_bytes, filetype="pdf")
@@ -62,7 +62,55 @@ def process_file(uploaded_file):
         return extract_text_from_txt(file_bytes)
     else:
         raise ValueError(f"Unsupported file format: {file_extension}")
+'''
+def extract_text_from_pdf(file_bytes):
+    try:
+        document = fitz.open(stream=file_bytes, filetype="pdf")
+        text_parts = [page.get_text() for page in document]
+        return " ".join(text_parts)
+    except Exception as e:
+        raise ValueError(f"Failed to open PDF: {e}")
 
+def extract_text_from_docx(file_bytes):
+    try:
+        doc = docx.Document(io.BytesIO(file_bytes))
+        text_parts = [paragraph.text for paragraph in doc.paragraphs]
+        return " ".join(text_parts)
+    except Exception as e:
+        raise ValueError(f"Failed to open DOCX: {e}")
+
+def extract_text_from_txt(file_bytes):
+    try:
+        return file_bytes.decode('utf-8')
+    except Exception as e:
+        raise ValueError(f"Failed to decode TXT file: {e}")
+
+def process_file(uploaded_file):
+    if uploaded_file is None:
+        raise FileNotFoundError("No file uploaded")
+
+    file_bytes = uploaded_file.read()
+    if not file_bytes:
+        raise ValueError("Uploaded file is empty or unreadable.")
+
+    file_extension = uploaded_file.name.split('.')[-1].lower()
+
+    if file_extension == 'pdf':
+        return extract_text_from_pdf(file_bytes)
+    elif file_extension == 'docx':
+        return extract_text_from_docx(file_bytes)
+    elif file_extension == 'doc':
+        st.warning("DOC format has limited support. For best results, consider converting to DOCX or PDF.")
+        try:
+            return extract_text_from_docx(file_bytes)
+        except Exception as e:
+            st.error(f"Error processing DOC file: {e}")
+            return "Error processing DOC file. Please convert to DOCX or PDF for better results."
+    elif file_extension == 'txt':
+        return extract_text_from_txt(file_bytes)
+    else:
+        raise ValueError(f"Unsupported file format: {file_extension}")
+        
 # Define all prompts
 input_prompt1 = """
 Role: Experienced Technical Human Resource Manager with expertise in technical evaluations and Recruitment
@@ -335,6 +383,7 @@ elif submit_general_query:
                 st.write("Please upload a resume file or enter a Job Description to proceed.")
     else:
         st.write("Please upload a resume file or enter a Job Description to proceed.")
+
 
 
 
