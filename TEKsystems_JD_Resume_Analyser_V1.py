@@ -12,7 +12,7 @@ os.getenv("GOOGLE_API_KEY")
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 def get_gemini_response(input_jd, resume_content, prompt, additional_input=""):
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-2.5-flash')
     if additional_input:
         response = model.generate_content([input_jd, resume_content, prompt, additional_input])
     else:
@@ -342,3 +342,4 @@ elif submit_jd_clarification:
             st.error(f"Error processing request: {e}")
     else:
         st.write("Please enter a Job Description to proceed.")
+
