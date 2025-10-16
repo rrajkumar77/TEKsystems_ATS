@@ -18,51 +18,7 @@ def get_gemini_response(input_jd, resume_content, prompt, additional_input=""):
     else:
         response = model.generate_content([input_jd, resume_content, prompt])
     return response.text
-'''
-def extract_text_from_pdf(file_bytes):
-    """Extract text from PDF file"""
-    document = fitz.open(stream=file_bytes, filetype="pdf")
-    text_parts = []
-    for page in document:
-        text_parts.append(page.get_text())
-    return " ".join(text_parts)
 
-def extract_text_from_docx(file_bytes):
-    """Extract text from DOCX file"""
-    doc = docx.Document(io.BytesIO(file_bytes))
-    text_parts = []
-    for paragraph in doc.paragraphs:
-        text_parts.append(paragraph.text)
-    return " ".join(text_parts)
-
-def extract_text_from_txt(file_bytes):
-    """Extract text from TXT file"""
-    return file_bytes.decode('utf-8')
-
-def process_file(uploaded_file):
-    """Process different file formats and extract text"""
-    if uploaded_file is None:
-        raise FileNotFoundError("No file uploaded")
-    
-    file_bytes = uploaded_file.read()
-    file_extension = uploaded_file.name.split('.')[-1].lower()
-    
-    if file_extension == 'pdf':
-        return extract_text_from_pdf(file_bytes)
-    elif file_extension == 'docx':
-        return extract_text_from_docx(file_bytes)
-    elif file_extension == 'doc':
-        st.warning("DOC format has limited support. For best results, consider converting to DOCX or PDF.")
-        try:
-            return extract_text_from_docx(file_bytes)
-        except Exception as e:
-            st.error(f"Error processing DOC file: {e}")
-            return "Error processing DOC file. Please convert to DOCX or PDF for better results."
-    elif file_extension == 'txt':
-        return extract_text_from_txt(file_bytes)
-    else:
-        raise ValueError(f"Unsupported file format: {file_extension}")
-'''
 def extract_text_from_pdf(file_bytes):
     try:
         document = fitz.open(stream=file_bytes, filetype="pdf")
@@ -383,6 +339,7 @@ elif submit_general_query:
                 st.write("Please upload a resume file or enter a Job Description to proceed.")
     else:
         st.write("Please upload a resume file or enter a Job Description to proceed.")
+
 
 
 
