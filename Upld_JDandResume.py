@@ -88,9 +88,9 @@ Task: Generate technical questions based on the provided job description and res
 Objective: Create technical questions tailored to the JD and resume, sequenced from project start to finish.
 Instructions:
 1. Input: A job description (JD) detailing the role's requirements, skills, and responsibilities, and a resume extracted from a PDF outlining the candidate's skills, experience, and projects.
-2. Process: Analyze the JD and resume to generate up to 5 technical questions in project lifecycle order (requirements gathering, design, development, testing, deployment). Base the questions on the skills, tools, and experiences mentioned in the JD and resume.
+2. Process: Analyze the JD and resume to generate up to 5 technical questions for each Category (requirements gathering, design, development, testing, deployment). Base the questions on the skills, tools, and experiences mentioned in the JD and resume.
 3. Output: For each question, provide:
- - Category: "Behavioural Question","skillbased Technical Question", "Situational Question", "Problem Solving Question".
+ - Category: "Behavioural Question","skill based Technical Question", "Situational Question", "Problem Solving Question".
  - Question: A clear, specific question relevant to the JD and resume (e.g., "How do you approach requirements gathering for a data-driven project?").
  - Answer: A detailed answer for recruiters to validate responses, including key concepts, tools, or techniques the candidate should mention.
 Additional Notes:
@@ -339,6 +339,7 @@ elif submit_general_query:
                 st.write("Please upload a resume file or enter a Job Description to proceed.")
     else:
         st.write("Please upload a resume file or enter a Job Description to proceed.")
+
 
 
 
