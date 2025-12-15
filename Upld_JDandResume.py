@@ -12,7 +12,7 @@ os.getenv("GOOGLE_API_KEY")
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 def get_gemini_response(input_jd, resume_content, prompt, additional_input=""):
-    model = genai.GenerativeModel('gemini-2.5-flash')
+    model = genai.GenerativeModel('gemini-2.0-flash')
     if additional_input:
         response = model.generate_content([input_jd, resume_content, prompt, additional_input])
     else:
@@ -339,6 +339,7 @@ elif submit_general_query:
                 st.write("Please upload a resume file or enter a Job Description to proceed.")
     else:
         st.write("Please upload a resume file or enter a Job Description to proceed.")
+
 
 
 
