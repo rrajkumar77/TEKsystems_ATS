@@ -1,3 +1,4 @@
+
 import streamlit as st
 import os
 import io
@@ -11,18 +12,15 @@ from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
-from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain.chains import create_retrieval_chain
-from langchain.schema import Document
 
 # -------------------- ENV & MODEL --------------------
 load_dotenv()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 if not GROQ_API_KEY:
-    raise RuntimeError("GROQ_API_KEY not found. Set it in your environment or .env.")
+    raise RuntimeError("GROQ_API_KEY not found. Set it in your environment or .env")
 
 # Initialize LLM (Groq via LangChain)
-# You can switch models: "llama-3.1-70b-versatile", "mixtral-8x7b-32768", etc.
+# You can switch to: "llama-3.1-70b-versatile", "mixtral-8x7b-32768", "gemma2-27b-it"
 llm = ChatGroq(
     api_key=GROQ_API_KEY,
     model_name="llama-3.3-70b-versatile",
@@ -41,8 +39,8 @@ def extract_text_from_pdf(file_bytes: bytes) -> str:
 
 def extract_text_from_docx(file_bytes: bytes) -> str:
     try:
-        doc = docx.Document(io.BytesIO(file_bytes))
-        text_parts = [paragraph.text for paragraph in doc.paragraphs]
+        d = docx.Document(io.BytesIO(file_bytes))
+        text_parts = [p.text for p in d.paragraphs]
         return " ".join(text_parts)
     except Exception as e:
         raise ValueError(f"Failed to open DOCX: {e}")
@@ -61,27 +59,28 @@ def process_file(uploaded_file) -> str:
     if not file_bytes:
         raise ValueError("Uploaded file is empty or unreadable.")
 
-    file_extension = uploaded_file.name.split(".")[-1].lower()
-    if file_extension == "pdf":
+    ext = uploaded_file.name.split(".")[-1].lower()
+    if ext == "pdf":
         return extract_text_from_pdf(file_bytes)
-    elif file_extension == "docx":
+    elif ext == "docx":
         return extract_text_from_docx(file_bytes)
-    elif file_extension == "doc":
+    elif ext == "doc":
         st.warning("DOC has limited support. Please convert to DOCX or PDF for best results.")
         try:
             return extract_text_from_docx(file_bytes)
         except Exception as e:
             st.error(f"Error processing DOC file: {e}")
             return "Error processing DOC file. Please convert to DOCX or PDF for better results."
-    elif file_extension == "txt":
+    elif ext == "txt":
         return extract_text_from_txt(file_bytes)
     else:
-        raise ValueError(f"Unsupported file format: {file_extension}")
+        raise ValueError(f"Unsupported file format: {ext}")
 
 # -------------------- RAG INDEX BUILD --------------------
 def build_vectorstore(jd_text: str, resume_text: str):
     """
     Builds a single Chroma vectorstore containing both JD and Resume chunks with metadata.
+    In-memory for simplicity (ephemeral). Add persist_directory for persistence.
     """
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=1200,
@@ -90,6 +89,7 @@ def build_vectorstore(jd_text: str, resume_text: str):
     )
     docs = []
 
+    from langchain.schema import Document
     if jd_text:
         jd_docs = splitter.create_documents([jd_text], metadatas=[{"source": "jd"}])
         docs.extend(jd_docs)
@@ -100,14 +100,39 @@ def build_vectorstore(jd_text: str, resume_text: str):
     if not docs:
         return None
 
-    embeddings = FastEmbedEmbeddings()  # lightweight local embeddings
+    embeddings = FastEmbedEmbeddings()  # lightweight local embeddings, no API
     vs = Chroma.from_documents(
         documents=docs,
         embedding=embeddings,
         collection_name="jobfit_rag",
-        # No persist_directory -> in-memory (ephemeral) store
+        # persist_directory="./chroma_jobfit"  # uncomment to persist
     )
     return vs
+
+def make_retriever(vectorstore, scope="both", k=8, search_type="mmr"):
+    """
+    scope: "jd" | "resume" | "both"
+    """
+    kwargs = {"k": k}
+    if scope in ("jd", "resume"):
+        kwargs["filter"] = {"source": scope}
+    retriever = vectorstore.as_retriever(search_type=search_type, search_kwargs=kwargs)
+    return retriever
+
+def retrieve_context(vectorstore, scope: str, query: str, k: int = 8) -> str:
+    retriever = make_retriever(vectorstore, scope=scope, k=k)
+    docs = retriever.get_relevant_documents(query)
+    return "\n\n".join([d.page_content for d in docs])
+
+def call_llm_with_context(prompt_template: str, context: str, **fmt_vars) -> str:
+    """
+    Formats a chat prompt with context + variables and calls the LLM.
+    """
+    prompt = ChatPromptTemplate.from_template(prompt_template)
+    # Build messages for the Chat model
+    messages = prompt.format_messages(context=context, **fmt_vars)
+    response = llm.invoke(messages)
+    return response.content
 
 # -------------------- PROMPTS --------------------
 PROMPT_RECRUITER = """\
@@ -258,40 +283,6 @@ User question:
 Task: Provide a clear, concise, context-aware answer. If the question is unclear, ask one clarifying question.
 """
 
-# -------------------- RAG CHAIN HELPERS --------------------
-def make_retriever(vectorstore, scope="both", k=6):
-    """
-    scope: "jd" | "resume" | "both"
-    """
-    if scope == "jd":
-        return vectorstore.as_retriever(search_kwargs={"k": k, "filter": {"source": "jd"}})
-    elif scope == "resume":
-        return vectorstore.as_retriever(search_kwargs={"k": k, "filter": {"source": "resume"}})
-    else:
-        return vectorstore.as_retriever(search_kwargs={"k": k})
-
-def run_rag_task(retriever, prompt_template: str, **fmt_vars):
-    """
-    Creates a retrieval-augmented chain with a stuff-combine strategy.
-    fmt_vars should include keys used in the prompt (e.g., user_query, top_skills).
-    """
-    prompt = ChatPromptTemplate.from_template(prompt_template)
-
-    # Chain that stuffs retrieved docs into {context}
-    doc_chain = create_stuff_documents_chain(
-        llm=llm,
-        prompt=prompt,
-        document_variable_name="context",
-    )
-    retrieval_chain = create_retrieval_chain(retriever, doc_chain)
-
-    # Build inference input
-    input_vars = {}
-    input_vars.update(fmt_vars)  # e.g., user_query=..., top_skills=...
-
-    result = retrieval_chain.invoke(input_vars)
-    return result["answer"]
-
 # -------------------- STREAMLIT UI --------------------
 st.set_page_config(page_title="Resume Expert (RAG + LangChain)")
 st.header("TEKsystems JobFit Analyzer — RAG Edition (LangChain + Groq)")
@@ -324,7 +315,7 @@ if uploaded_resume is not None:
     st.write(f"{file_type} Resume Uploaded Successfully")
     resume_content = process_file(uploaded_resume)
 
-# Buttons
+# Controls
 col1, col2, col3 = st.columns(3)
 with col1:
     submit_recruiter = st.button("Technical Recruiter Analysis", key="submit_recruiter")
@@ -341,29 +332,40 @@ submit_skill_analysis = st.button("Skill Analysis", key="submit_skill_analysis")
 input_promp = st.text_input("Queries: Feel Free to Ask here", key="custom_query_input")
 submit_general_query = st.button("Answer My Query", key="submit_general_query")
 
-# Build vector store once and cache in session
+# Build / cache vectorstore
 if "vectorstore" not in st.session_state:
     st.session_state.vectorstore = None
+if "indexed_key" not in st.session_state:
+    st.session_state.indexed_key = None
 
-if (jd_content or resume_content) and st.session_state.vectorstore is None:
-    with st.spinner("Indexing documents for retrieval..."):
-        vs = build_vectorstore(jd_content, resume_content)
-        st.session_state.vectorstore = vs
+def compute_index_key(jd_text, resume_text):
+    return f"{hash(jd_text) if jd_text else 0}-{hash(resume_text) if resume_text else 0}"
 
-# --------------- Actions ---------------
+if jd_content or resume_content:
+    key_now = compute_index_key(jd_content, resume_content)
+    if st.session_state.vectorstore is None or st.session_state.indexed_key != key_now:
+        with st.spinner("Indexing documents for retrieval..."):
+            vs = build_vectorstore(jd_content, resume_content)
+            st.session_state.vectorstore = vs
+            st.session_state.indexed_key = key_now
+
 def ensure_vs():
     if st.session_state.vectorstore is None:
         st.warning("Please upload a Job Description and/or a Resume first.")
         return None
     return st.session_state.vectorstore
 
+# --------------- Actions ---------------
 if submit_recruiter:
     if jd_content and resume_content:
         vs = ensure_vs()
         if vs:
-            retriever = make_retriever(vs, scope="both", k=8)
             with st.spinner("Analyzing alignment..."):
-                answer = run_rag_task(retriever, PROMPT_RECRUITER)
+                # Retrieve from both JD & resume to ground the comparison
+                ctx_jd = retrieve_context(vs, "jd", "role requirements, key responsibilities, skills, experience", k=8)
+                ctx_cv = retrieve_context(vs, "resume", "candidate skills, projects, responsibilities, experience", k=8)
+                context = ctx_jd + "\n\n---\n\n" + ctx_cv
+                answer = call_llm_with_context(PROMPT_RECRUITER, context)
             st.subheader("Technical Recruiter Analysis")
             st.write(answer)
     else:
@@ -373,9 +375,11 @@ elif submit_technical_questions:
     if jd_content and resume_content:
         vs = ensure_vs()
         if vs:
-            retriever = make_retriever(vs, scope="both", k=8)
             with st.spinner("Generating technical questions..."):
-                answer = run_rag_task(retriever, PROMPT_TECHNICAL_Q)
+                ctx_jd = retrieve_context(vs, "jd", "technical stack, tools, methodologies, domain", k=8)
+                ctx_cv = retrieve_context(vs, "resume", "skills, tools, technologies, project details", k=8)
+                context = ctx_jd + "\n\n---\n\n" + ctx_cv
+                answer = call_llm_with_context(PROMPT_TECHNICAL_Q, context)
             st.subheader("Technical Questions")
             st.write(answer)
     else:
@@ -385,82 +389,5 @@ elif submit_coding_questions:
     if jd_content and resume_content:
         vs = ensure_vs()
         if vs:
-            retriever = make_retriever(vs, scope="both", k=8)
             with st.spinner("Generating coding questions..."):
-                answer = run_rag_task(retriever, PROMPT_CODING_Q)
-            st.subheader("Coding Questions")
-            st.write(answer)
-    else:
-        st.info("Please upload both a Job Description and a Resume to proceed.")
-
-elif submit_domain:
-    if jd_content and resume_content:
-        vs = ensure_vs()
-        if vs:
-            retriever = make_retriever(vs, scope="both", k=8)
-            with st.spinner("Running domain-fit analysis..."):
-                answer = run_rag_task(retriever, PROMPT_DOMAIN)
-            st.subheader("Domain Expert Analysis")
-            st.write(answer)
-    else:
-        st.info("Please upload both a Job Description and a Resume to proceed.")
-
-elif submit_manager:
-    if jd_content and resume_content:
-        vs = ensure_vs()
-        if vs:
-            retriever = make_retriever(vs, scope="both", k=8)
-            with st.spinner("Running technical-fit analysis..."):
-                answer = run_rag_task(retriever, PROMPT_MANAGER)
-            st.subheader("Technical Manager Analysis")
-            st.write(answer)
-    else:
-        st.info("Please upload both a Job Description and a Resume to proceed.")
-
-elif submit_jd_summarization:
-    if jd_content:
-        vs = ensure_vs()
-        if vs:
-            retriever = make_retriever(vs, scope="jd", k=8)
-            with st.spinner("Summarizing JD..."):
-                answer = run_rag_task(retriever, PROMPT_JD_SUMMARY)
-            st.subheader("Job Description Summary")
-            st.write(answer)
-    else:
-        st.info("Please upload a Job Description to proceed.")
-
-elif submit_jd_clarification:
-    if jd_content:
-        vs = ensure_vs()
-        if vs:
-            retriever = make_retriever(vs, scope="jd", k=8)
-            with st.spinner("Drafting clarification questions..."):
-                answer = run_rag_task(retriever, PROMPT_JD_CLARIFICATION)
-            st.subheader("JD Clarification Questions")
-            st.write(answer)
-    else:
-        st.info("Please upload a Job Description to proceed.")
-
-elif submit_skill_analysis:
-    if uploaded_resume is not None and top_skills:
-        vs = ensure_vs()
-        if vs:
-            retriever = make_retriever(vs, scope="resume", k=8)
-            with st.spinner("Analyzing top skills in the resume..."):
-                answer = run_rag_task(retriever, PROMPT_SKILL_ANALYST, top_skills=top_skills)
-            st.subheader("Top Skill Analysis")
-            st.write(answer)
-    else:
-        st.info("Please upload a Resume and enter Top Skills to proceed.")
-
-elif submit_general_query:
-    if jd_content or resume_content:
-        vs = ensure_vs()
-        if vs:
-            retriever = make_retriever(vs, scope="both", k=8)
-            with st.spinner("Answering your query..."):
-                answer = run_rag_task(retriever, PROMPT_GENERAL_Q, user_query=input_promp or "Provide insights based on the context.")
-            st.subheader("Query Response")
-            st.write(answer)
-    else:
-        st.info("Please upload a Resume or a Job Description to proceed.")
+                ctx_jd = retrieve_context(vs, "jd", "coding tasks, programming languages, data processing, testing", k=8)
