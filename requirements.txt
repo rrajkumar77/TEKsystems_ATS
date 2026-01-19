@@ -1,4 +1,4 @@
-'''
+
 streamlit
 requests
 PyPDF2
@@ -18,7 +18,7 @@ langchain-text-splitters
 langchain-groq 
 chromadb 
 fastembed
-'''
+
 
 streamlit
 python-dotenv
@@ -33,4 +33,5 @@ chromadb
 fastembed
 pydantic
 typing_extensions
+
 
