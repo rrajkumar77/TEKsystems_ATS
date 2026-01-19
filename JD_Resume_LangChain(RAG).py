@@ -13,27 +13,55 @@ from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 
-# -------------------- ENV & MODEL --------------------
+# ==================== ENV & MODEL ====================
 load_dotenv()
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+def get_api_key():
+    # Prefer Streamlit Cloud secrets; fallback to .env
+    if "GROQ_API_KEY" in st.secrets:
+        return st.secrets["GROQ_API_KEY"]
+    return os.getenv("GROQ_API_KEY")
+
+GROQ_API_KEY = get_api_key()
 if not GROQ_API_KEY:
-    raise RuntimeError("GROQ_API_KEY not found. Set it in your environment or .env")
+    raise RuntimeError(
+        "GROQ_API_KEY not found. Set it in Streamlit Secrets or .env"
+    )
+
+# Sidebar controls (optional)
+st.set_page_config(page_title="Resume Expert (RAG + LangChain + Groq)", layout="wide")
+with st.sidebar:
+    st.header("⚙️ Settings")
+    model_name = st.selectbox(
+        "Groq model",
+        options=[
+            "llama-3.3-70b-versatile",
+            "llama-3.1-70b-versatile",
+            "mixtral-8x7b-32768",
+            "gemma2-27b-it",
+        ],
+        index=0,
+        help="Choose the LLM model served by Groq",
+    )
+    temperature = st.slider("Temperature", 0.0, 1.0, 0.2, 0.05)
+    max_tokens = st.number_input("Max tokens", min_value=256, max_value=8192, value=3000, step=128)
+    k_retrieval = st.slider("Retriever k", 2, 12, 8, 1)
+    search_type = st.selectbox("Retriever search type", ["mmr", "similarity"], index=0)
 
 # Initialize LLM (Groq via LangChain)
-# You can switch to: "llama-3.1-70b-versatile", "mixtral-8x7b-32768", "gemma2-27b-it"
 llm = ChatGroq(
     api_key=GROQ_API_KEY,
-    model_name="llama-3.3-70b-versatile",
-    temperature=0.2,
-    max_tokens=3000,
+    model_name=model_name,
+    temperature=temperature,
+    max_tokens=max_tokens,
 )
 
-# -------------------- FILE HELPERS --------------------
+# ==================== FILE HELPERS ====================
 def extract_text_from_pdf(file_bytes: bytes) -> str:
     try:
         document = fitz.open(stream=file_bytes, filetype="pdf")
         text_parts = [page.get_text() for page in document]
-        return " ".join(text_parts)
+        return " ".join(text_parts).strip()
     except Exception as e:
         raise ValueError(f"Failed to open PDF: {e}")
 
@@ -41,13 +69,13 @@ def extract_text_from_docx(file_bytes: bytes) -> str:
     try:
         d = docx.Document(io.BytesIO(file_bytes))
         text_parts = [p.text for p in d.paragraphs]
-        return " ".join(text_parts)
+        return " ".join(text_parts).strip()
     except Exception as e:
         raise ValueError(f"Failed to open DOCX: {e}")
 
 def extract_text_from_txt(file_bytes: bytes) -> str:
     try:
-        return file_bytes.decode("utf-8")
+        return file_bytes.decode("utf-8").strip()
     except Exception as e:
         raise ValueError(f"Failed to decode TXT file: {e}")
 
@@ -76,11 +104,11 @@ def process_file(uploaded_file) -> str:
     else:
         raise ValueError(f"Unsupported file format: {ext}")
 
-# -------------------- RAG INDEX BUILD --------------------
+# ==================== RAG INDEX BUILD ====================
 def build_vectorstore(jd_text: str, resume_text: str):
     """
     Builds a single Chroma vectorstore containing both JD and Resume chunks with metadata.
-    In-memory for simplicity (ephemeral). Add persist_directory for persistence.
+    In-memory for simplicity (ephemeral). Add persist_directory for persistence if needed.
     """
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=1200,
@@ -89,7 +117,7 @@ def build_vectorstore(jd_text: str, resume_text: str):
     )
     docs = []
 
-    from langchain.schema import Document
+    # NOTE: No need to import Document explicitly; create_documents returns Documents
     if jd_text:
         jd_docs = splitter.create_documents([jd_text], metadatas=[{"source": "jd"}])
         docs.extend(jd_docs)
@@ -100,12 +128,12 @@ def build_vectorstore(jd_text: str, resume_text: str):
     if not docs:
         return None
 
-    embeddings = FastEmbedEmbeddings()  # lightweight local embeddings, no API
+    embeddings = FastEmbedEmbeddings()  # lightweight local embeddings, no external calls
     vs = Chroma.from_documents(
         documents=docs,
         embedding=embeddings,
         collection_name="jobfit_rag",
-        # persist_directory="./chroma_jobfit"  # uncomment to persist
+        # persist_directory="./chroma_jobfit"  # uncomment to persist across runs
     )
     return vs
 
@@ -119,8 +147,8 @@ def make_retriever(vectorstore, scope="both", k=8, search_type="mmr"):
     retriever = vectorstore.as_retriever(search_type=search_type, search_kwargs=kwargs)
     return retriever
 
-def retrieve_context(vectorstore, scope: str, query: str, k: int = 8) -> str:
-    retriever = make_retriever(vectorstore, scope=scope, k=k)
+def retrieve_context(vectorstore, scope: str, query: str, k: int = 8, search_type: str = "mmr") -> str:
+    retriever = make_retriever(vectorstore, scope=scope, k=k, search_type=search_type)
     docs = retriever.get_relevant_documents(query)
     return "\n\n".join([d.page_content for d in docs])
 
@@ -129,12 +157,11 @@ def call_llm_with_context(prompt_template: str, context: str, **fmt_vars) -> str
     Formats a chat prompt with context + variables and calls the LLM.
     """
     prompt = ChatPromptTemplate.from_template(prompt_template)
-    # Build messages for the Chat model
     messages = prompt.format_messages(context=context, **fmt_vars)
     response = llm.invoke(messages)
     return response.content
 
-# -------------------- PROMPTS --------------------
+# ==================== PROMPTS ====================
 PROMPT_RECRUITER = """\
 You are an Experienced Technical HR Manager with deep expertise in technical evaluations and recruitment.
 Use the provided context from the Job Description and Resume to assess alignment.
@@ -283,10 +310,9 @@ User question:
 Task: Provide a clear, concise, context-aware answer. If the question is unclear, ask one clarifying question.
 """
 
-# -------------------- STREAMLIT UI --------------------
-st.set_page_config(page_title="Resume Expert (RAG + LangChain)")
-st.header("TEKsystems JobFit Analyzer — RAG Edition (LangChain + Groq)")
-st.subheader("Understand the JD and evaluate the Resume with grounded retrieval")
+# ==================== UI LAYOUT ====================
+st.title("TEKsystems JobFit Analyzer — RAG Edition (LangChain + Groq)")
+st.caption("Upload a JD and/or Resume, and generate grounded analyses, questions, and summaries.")
 
 uploaded_jd = st.file_uploader(
     "Upload the Job Description (PDF, DOCX, DOC, TXT)...",
@@ -298,21 +324,29 @@ submit_jd_clarification = st.button("JD Clarification Questions", key="submit_jd
 
 uploaded_resume = st.file_uploader(
     "Upload your Resume (PDF, DOCX, DOC, TXT)...",
-    type=["pdf", "docx", "doc", "txt"],
-    key="resume_uploader"
+    type=["pdf, docx, doc, txt"],
+    accept_multiple_files=False,
+    key="resume_uploader_raw"
 )
+# Workaround for MIME types: define again with `type` argument
+if uploaded_resume is None:
+    uploaded_resume = st.file_uploader(
+        "Upload your Resume (PDF, DOCX, DOC, TXT)...",
+        type=["pdf", "docx", "doc", "txt"],
+        key="resume_uploader"
+    )
 
 jd_content = ""
 resume_content = ""
 
 if uploaded_jd is not None:
     file_type = uploaded_jd.name.split(".")[-1].upper()
-    st.write(f"{file_type} Job Description Uploaded Successfully")
+    st.success(f"✅ {file_type} Job Description uploaded")
     jd_content = process_file(uploaded_jd)
 
 if uploaded_resume is not None:
     file_type = uploaded_resume.name.split(".")[-1].upper()
-    st.write(f"{file_type} Resume Uploaded Successfully")
+    st.success(f"✅ {file_type} Resume uploaded")
     resume_content = process_file(uploaded_resume)
 
 # Controls
@@ -332,19 +366,20 @@ submit_skill_analysis = st.button("Skill Analysis", key="submit_skill_analysis")
 input_promp = st.text_input("Queries: Feel Free to Ask here", key="custom_query_input")
 submit_general_query = st.button("Answer My Query", key="submit_general_query")
 
-# Build / cache vectorstore
+# ==================== VECTORSTORE CACHE ====================
 if "vectorstore" not in st.session_state:
     st.session_state.vectorstore = None
 if "indexed_key" not in st.session_state:
     st.session_state.indexed_key = None
 
 def compute_index_key(jd_text, resume_text):
+    # Use hashes to detect content changes and rebuild index
     return f"{hash(jd_text) if jd_text else 0}-{hash(resume_text) if resume_text else 0}"
 
 if jd_content or resume_content:
     key_now = compute_index_key(jd_content, resume_content)
     if st.session_state.vectorstore is None or st.session_state.indexed_key != key_now:
-        with st.spinner("Indexing documents for retrieval..."):
+        with st.spinner("🔎 Indexing documents for retrieval..."):
             vs = build_vectorstore(jd_content, resume_content)
             st.session_state.vectorstore = vs
             st.session_state.indexed_key = key_now
@@ -355,15 +390,14 @@ def ensure_vs():
         return None
     return st.session_state.vectorstore
 
-# --------------- Actions ---------------
+# ==================== ACTIONS ====================
 if submit_recruiter:
     if jd_content and resume_content:
         vs = ensure_vs()
         if vs:
             with st.spinner("Analyzing alignment..."):
-                # Retrieve from both JD & resume to ground the comparison
-                ctx_jd = retrieve_context(vs, "jd", "role requirements, key responsibilities, skills, experience", k=8)
-                ctx_cv = retrieve_context(vs, "resume", "candidate skills, projects, responsibilities, experience", k=8)
+                ctx_jd = retrieve_context(vs, "jd", "role requirements, responsibilities, skills, experience", k=k_retrieval, search_type=search_type)
+                ctx_cv = retrieve_context(vs, "resume", "candidate skills, projects, responsibilities, experience", k=k_retrieval, search_type=search_type)
                 context = ctx_jd + "\n\n---\n\n" + ctx_cv
                 answer = call_llm_with_context(PROMPT_RECRUITER, context)
             st.subheader("Technical Recruiter Analysis")
@@ -376,8 +410,8 @@ elif submit_technical_questions:
         vs = ensure_vs()
         if vs:
             with st.spinner("Generating technical questions..."):
-                ctx_jd = retrieve_context(vs, "jd", "technical stack, tools, methodologies, domain", k=8)
-                ctx_cv = retrieve_context(vs, "resume", "skills, tools, technologies, project details", k=8)
+                ctx_jd = retrieve_context(vs, "jd", "technical stack, tools, methodologies, domain", k=k_retrieval, search_type=search_type)
+                ctx_cv = retrieve_context(vs, "resume", "skills, tools, technologies, project details", k=k_retrieval, search_type=search_type)
                 context = ctx_jd + "\n\n---\n\n" + ctx_cv
                 answer = call_llm_with_context(PROMPT_TECHNICAL_Q, context)
             st.subheader("Technical Questions")
@@ -390,4 +424,89 @@ elif submit_coding_questions:
         vs = ensure_vs()
         if vs:
             with st.spinner("Generating coding questions..."):
-                ctx_jd = retrieve_context(vs, "jd", "coding tasks, programming languages, data processing, testing", k=8)
+                ctx_jd = retrieve_context(vs, "jd", "coding tasks, programming languages, data processing, testing", k=k_retrieval, search_type=search_type)
+                ctx_cv = retrieve_context(vs, "resume", "coding experience, problems solved, libraries, pipelines, testing", k=k_retrieval, search_type=search_type)
+                context = ctx_jd + "\n\n---\n\n" + ctx_cv
+                answer = call_llm_with_context(PROMPT_CODING_Q, context)
+            st.subheader("Coding Questions")
+            st.write(answer)
+    else:
+        st.info("Please upload both a Job Description and a Resume to proceed.")
+
+elif submit_domain:
+    if jd_content and resume_content:
+        vs = ensure_vs()
+        if vs:
+            with st.spinner("Running domain-fit analysis..."):
+                ctx_jd = retrieve_context(vs, "jd", "domain, business context, analytics, industry", k=k_retrieval, search_type=search_type)
+                ctx_cv = retrieve_context(vs, "resume", "domain experience, projects, industry exposure", k=k_retrieval, search_type=search_type)
+                context = ctx_jd + "\n\n---\n\n" + ctx_cv
+                answer = call_llm_with_context(PROMPT_DOMAIN, context)
+            st.subheader("Domain Expert Analysis")
+            st.write(answer)
+    else:
+        st.info("Please upload both a Job Description and a Resume to proceed.")
+
+elif submit_manager:
+    if jd_content and resume_content:
+        vs = ensure_vs()
+        if vs:
+            with st.spinner("Running technical-fit analysis..."):
+                ctx_jd = retrieve_context(vs, "jd", "required skills and years of experience, tooling, architecture", k=k_retrieval, search_type=search_type)
+                ctx_cv = retrieve_context(vs, "resume", "skills with experience, projects, responsibilities", k=k_retrieval, search_type=search_type)
+                context = ctx_jd + "\n\n---\n\n" + ctx_cv
+                answer = call_llm_with_context(PROMPT_MANAGER, context)
+            st.subheader("Technical Manager Analysis")
+            st.write(answer)
+    else:
+        st.info("Please upload both a Job Description and a Resume to proceed.")
+
+elif submit_jd_summarization:
+    if jd_content:
+        vs = ensure_vs()
+        if vs:
+            with st.spinner("Summarizing JD..."):
+                context = retrieve_context(vs, "jd", "summarize job description responsibilities skills qualifications", k=k_retrieval, search_type=search_type)
+                answer = call_llm_with_context(PROMPT_JD_SUMMARY, context)
+            st.subheader("Job Description Summary")
+            st.write(answer)
+    else:
+        st.info("Please upload a Job Description to proceed.")
+
+elif submit_jd_clarification:
+    if jd_content:
+        vs = ensure_vs()
+        if vs:
+            with st.spinner("Drafting clarification questions..."):
+                context = retrieve_context(vs, "jd", "technical scope, tools, platforms, expectations, project details", k=k_retrieval, search_type=search_type)
+                answer = call_llm_with_context(PROMPT_JD_CLARIFICATION, context)
+            st.subheader("JD Clarification Questions")
+            st.write(answer)
+    else:
+        st.info("Please upload a Job Description to proceed.")
+
+elif submit_skill_analysis:
+    if uploaded_resume is not None and top_skills:
+        vs = ensure_vs()
+        if vs:
+            with st.spinner("Analyzing top skills in the resume..."):
+                context = retrieve_context(vs, "resume", f"{top_skills}. roles, projects, responsibilities, dates, durations", k=k_retrieval, search_type=search_type)
+                answer = call_llm_with_context(PROMPT_SKILL_ANALYST, context, top_skills=top_skills)
+            st.subheader("Top Skill Analysis")
+            st.write(answer)
+    else:
+        st.info("Please upload a Resume and enter Top Skills to proceed.")
+
+elif submit_general_query:
+    if jd_content or resume_content:
+        vs = ensure_vs()
+        if vs:
+            with st.spinner("Answering your query..."):
+                ctx_jd = retrieve_context(vs, "jd", input_promp or "requirements and skills", k=max(2, k_retrieval - 2), search_type=search_type) if jd_content else ""
+                ctx_cv = retrieve_context(vs, "resume", input_promp or "candidate skills and projects", k=max(2, k_retrieval - 2), search_type=search_type) if resume_content else ""
+                context = (ctx_jd + "\n\n---\n\n" + ctx_cv).strip()
+                answer = call_llm_with_context(PROMPT_GENERAL_Q, context, user_query=input_promp or "Provide insights based on the context.")
+            st.subheader("Query Response")
+            st.write(answer)
+    else:
+        st.info("Please upload a Resume or a Job Description to proceed.")
