@@ -148,8 +148,17 @@ def make_retriever(vectorstore, scope="both", k=8, search_type="mmr"):
     return retriever
 
 def retrieve_context(vectorstore, scope: str, query: str, k: int = 8, search_type: str = "mmr") -> str:
+    """
+    Compatible with LangChain 0.3+ retrievers (Runnable).
+    Falls back to get_relevant_documents for older versions.
+    """
     retriever = make_retriever(vectorstore, scope=scope, k=k, search_type=search_type)
-    docs = retriever.get_relevant_documents(query)
+    try:
+        # LCEL retrievers support .invoke(query)
+        docs = retriever.invoke(query)
+    except AttributeError:
+        # Older retrievers use .get_relevant_documents(query)
+        docs = retriever.get_relevant_documents(query)
     return "\n\n".join([d.page_content for d in docs])
 
 def call_llm_with_context(prompt_template: str, context: str, **fmt_vars) -> str:
@@ -324,17 +333,9 @@ submit_jd_clarification = st.button("JD Clarification Questions", key="submit_jd
 
 uploaded_resume = st.file_uploader(
     "Upload your Resume (PDF, DOCX, DOC, TXT)...",
-    type=["pdf, docx, doc, txt"],
-    accept_multiple_files=False,
-    key="resume_uploader_raw"
+    type=["pdf", "docx", "doc", "txt"],
+    key="resume_uploader"
 )
-# Workaround for MIME types: define again with `type` argument
-if uploaded_resume is None:
-    uploaded_resume = st.file_uploader(
-        "Upload your Resume (PDF, DOCX, DOC, TXT)...",
-        type=["pdf", "docx", "doc", "txt"],
-        key="resume_uploader"
-    )
 
 jd_content = ""
 resume_content = ""
