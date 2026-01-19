@@ -11,4 +11,12 @@ PyMuPDF==1.22.3  # Use a specific stable version
 pymupdf 
 python-docx
 
+langchain 
+langchain-community 
+langchain-text-splitters
+langchain-groq 
+chromadb 
+fastembed
+
+
 
