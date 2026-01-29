@@ -505,7 +505,7 @@ elif submit_semantic_skills:
                 
                 with tab1:
                     st.write(f"**Validated Skills:** {len(report.validated_skills)}")
-                    st.write(f"**Weak Evidence:** {len(report.weak_evidence_skills)}")
+                    st.write(f"**Weak Evidence:** {len(report.weak_skills)}")
                     st.write(f"**Ignored (Skills-only):** {len(report.ignored_skills)}")
                     st.write(f"**Not Found:** {len(report.missing_skills)}")
                     
@@ -522,10 +522,10 @@ elif submit_semantic_skills:
                             st.write(f"**Status:** {skill_result.status.value}")
                             st.write(f"**Confidence Score:** {skill_result.relevance_score:.1%}")
                             st.write(f"**Reasoning:** {skill_result.reasoning}")
-                            if skill_result.evidence_list:
+                            if skill_result.evidence:
                                 st.write("**Evidence:**")
-                                for evidence in skill_result.evidence_list:
-                                    st.write(f"  - *{evidence.context_type}*: '{evidence.supporting_text[:100]}...'")
+                                for evidence in skill_result.evidence:
+                                    st.write(f"  - *{evidence.context_type.value}*: '{evidence.evidence_text[:100]}...'")
                                     st.write(f"    Action verbs: {', '.join(evidence.action_verbs) if evidence.action_verbs else 'N/A'}")
                 
                 with tab3:
@@ -543,10 +543,10 @@ elif submit_semantic_skills:
                                 "Skill": skill.skill_name,
                                 "Status": skill.status.value,
                                 "Confidence": f"{skill.relevance_score:.0%}",
-                                "Evidence Count": len(skill.evidence_list),
-                                "Action Verbs": ", ".join(skill.evidence_list[0].action_verbs) if skill.evidence_list and skill.evidence_list[0].action_verbs else "N/A"
+                                "Evidence Count": len(skill.evidence),
+                                "Action Verbs": ", ".join(skill.evidence[0].action_verbs) if skill.evidence and skill.evidence[0].action_verbs else "N/A"
                             }
-                            for skill in (report.validated_skills + report.weak_evidence_skills + report.ignored_skills)
+                            for skill in (report.validated_skills + report.weak_skills + report.ignored_skills)
                         ]),
                         use_container_width=True,
                         hide_index=True
