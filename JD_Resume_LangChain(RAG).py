@@ -4,6 +4,7 @@ import os
 import io
 import fitz  # PyMuPDF
 import docx  # python-docx
+import pandas as pd
 from dotenv import load_dotenv
 
 # LangChain / RAG imports
@@ -13,13 +14,21 @@ from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 
+# Semantic skill matcher imports
+from semantic_skill_matcher import SemanticSkillMatcher
+from semantic_matcher_streamlit import create_streamlit_component
+
 # ==================== ENV & MODEL ====================
 load_dotenv()
 
 def get_api_key():
     # Prefer Streamlit Cloud secrets; fallback to .env
-    if "GROQ_API_KEY" in st.secrets:
-        return st.secrets["GROQ_API_KEY"]
+    try:
+        if "GROQ_API_KEY" in st.secrets:
+            return st.secrets["GROQ_API_KEY"]
+    except Exception:
+        # st.secrets not available (not running in Streamlit context)
+        pass
     return os.getenv("GROQ_API_KEY")
 
 GROQ_API_KEY = get_api_key()
@@ -42,8 +51,43 @@ with st.sidebar:
         ],
         index=0,
         help="Choose the LLM model served by Groq",
+        key="groq_model"
     )
-    temperature = st.slider("Temperature", 0.0, 1.0, 0.2, 0.05)
+    temperature = st.slider("Temperature", 0.0, 1.0, 0.2, 0.05, key="llm_temperature")
+    max_tokens = st.number_input("Max tokens", min_value=256, max_value=8192, value=3000, step=128, key="llm_max_tokens")
+    k_retrieval = st.slider("Retriever k", 2, 12, 8, 1, key="retriever_k")
+    search_type = st.selectbox("Retriever search type", ["mmr", "similarity"], index=0, key="search_type")
+    
+    # Evidence-Backed Skill Validation controls (FR 6)
+    st.divider()
+    st.subheader("🎯 Evidence-Backed Skill Validation")
+    min_semantic_score = st.slider(
+        "Min Semantic Score",
+        min_value=0.0,
+        max_value=1.0,
+        value=0.65,
+        step=0.05,
+        help="Minimum semantic similarity required to validate a skill (0.0-1.0)",
+        key="min_semantic_score"
+    )
+    min_confidence_score = st.slider(
+        "Min Confidence Score",
+        min_value=0.0,
+        max_value=1.0,
+        value=0.60,
+        step=0.05,
+        help="Minimum combined confidence (semantic + action verb) required (0.0-1.0)",
+        key="min_confidence_score"
+    )
+    recency_weight = st.slider(
+        "Recency Weight (0=ignore, 1=prioritize recent)",
+        min_value=0.0,
+        max_value=1.0,
+        value=0.3,
+        step=0.1,
+        help="How much to weight recent projects higher",
+        key="recency_weight"
+    )
     max_tokens = st.number_input("Max tokens", min_value=256, max_value=8192, value=3000, step=128)
     k_retrieval = st.slider("Retriever k", 2, 12, 8, 1)
     search_type = st.selectbox("Retriever search type", ["mmr", "similarity"], index=0)
@@ -190,38 +234,69 @@ Task: Perform the full Recruiter Analysis.
 """
 
 PROMPT_TECHNICAL_Q = """\
-You are an Advanced AI for Technical Recruitment. Use the JD and Resume context to generate up to 5 questions each under these categories:
-- Behavioural Question
-- Skill based Technical Question
-- Situational Question
-- Problem Solving Question
+You are an Advanced AI for Technical Recruitment and Interview Preparation. Based on the JD and Resume context, generate structured interview questions organized by project lifecycle phases.
 
-Rules:
-- Questions should be tailored to skills/tools noted in the JD and Resume.
-- Include a model answer for each question to help recruiters validate responses.
-- Balance difficulty (basic, intermediate, advanced).
-- Keep generic (no company-specific references).
+LIFECYCLE PHASES & COVERAGE:
+1. **Requirements** - How do you approach gathering, validating, and documenting project requirements?
+2. **Design** - How do you architect solutions, design APIs, data models, or system components?
+3. **Development** - How do you implement, code, debug, and optimize features?
+4. **Testing** - How do you design test strategies, write tests, and ensure quality?
+5. **Deployment/Support** - How do you deploy, monitor, troubleshoot, and support production systems?
+
+FOR EACH QUESTION, provide:
+- **Question**: Clear, specific, experience-oriented question aligned with JD and Resume
+- **Answer Guide**:
+  - **Concepts**: Key theoretical knowledge (e.g., elicitation, design patterns, CI/CD)
+  - **Tools**: Technologies, platforms, frameworks mentioned in resume or needed for JD
+  - **Techniques**: Methodologies, best practices, or approaches used
+  - **Practical Indicators**: Signs the candidate has hands-on experience (actions, outcomes, decisions made)
+  - **Red Flags** (optional): Watch for superficial understanding or contradictions
+
+Generate 1-2 questions per lifecycle phase (total up to 10 questions). Ensure NO generic content; all questions must be grounded in the specific JD and Resume provided.
 
 <context>
 {context}
 </context>
 
-Task: Generate the categorized questions with answers in a clean bullet/numbered format.
+Task: Generate lifecycle-ordered interview questions with detailed Answer Guides.
+Output format:
+**[Lifecycle Phase: PHASE_NAME]**
+Q1: [Question]
+Answer Guide:
+- Concepts: ...
+- Tools: ...
+- Techniques: ...
+- Practical Indicators: ...
 """
 
 PROMPT_CODING_Q = """\
-You are an Advanced AI for Technical Recruitment. Based on the JD and Resume context, generate up to 5 coding questions ordered by project lifecycle (requirements, design, development, testing, deployment).
+You are an Advanced AI for Technical Assessment in Recruitment. Based on the JD and Resume, generate up to 5 coding/technical questions ordered by project lifecycle phases.
 
-For each:
-- Category: "skill based Coding Question"
-- Question: Specific coding task relevant to the JD/Resume stack
-- Answer: Provide a reference solution with code and a brief explanation
+SEQUENCING BY LIFECYCLE:
+1. **Requirements** - Data validation, input parsing, spec interpretation (e.g., "Parse a JSON config and validate fields")
+2. **Design** - Data structures, algorithms, API design (e.g., "Design a cache with LRU eviction")
+3. **Development** - Core implementation, feature building (e.g., "Implement a function to compute quarterly sales aggregates")
+4. **Testing** - Test logic, edge cases, error handling (e.g., "Write tests for null inputs and boundary conditions")
+5. **Deployment/Optimization** - Performance, scaling, monitoring (e.g., "Optimize a query that scans 10M rows")
+
+FOR EACH QUESTION, provide:
+- **Lifecycle Phase**: Which phase this question targets
+- **Question**: Clear, specific, realistic coding problem aligned with JD and Resume skills
+- **Answer**: Complete, working code solution (Python, SQL, or other relevant language from JD)
+- **Explanation**: Key concepts, approach, complexity analysis, and why the solution works
+- **Difficulty Level**: Basic | Intermediate | Advanced
+- **Key Concepts**: What the candidate should demonstrate (e.g., recursion, indexing, caching)
+
+Ensure questions are:
+- Grounded in the JD technical stack (e.g., Python, SQL, cloud APIs)
+- Realistic to candidate's resume experience level
+- NOT company-specific; broadly applicable
 
 <context>
 {context}
 </context>
 
-Task: Generate the coding questions with detailed solutions.
+Task: Generate lifecycle-ordered coding questions with complete solutions and explanations.
 """
 
 PROMPT_DOMAIN = """\
@@ -355,6 +430,7 @@ col1, col2, col3 = st.columns(3)
 with col1:
     submit_recruiter = st.button("Technical Recruiter Analysis", key="submit_recruiter")
     submit_domain = st.button("Domain Expert Analysis", key="submit_domain")
+    submit_semantic_skills = st.button("🎯 Evidence-Backed Skill Validation (NEW)", key="submit_semantic_skills")
 with col2:
     submit_technical_questions = st.button("Technical Questions", key="submit_technical_questions")
     submit_manager = st.button("Technical Manager Analysis", key="submit_manager")
@@ -403,6 +479,82 @@ if submit_recruiter:
                 answer = call_llm_with_context(PROMPT_RECRUITER, context)
             st.subheader("Technical Recruiter Analysis")
             st.write(answer)
+    else:
+        st.info("Please upload both a Job Description and a Resume to proceed.")
+
+elif submit_semantic_skills:
+    if jd_content and resume_content:
+        with st.spinner("🎯 Validating skills with semantic analysis and evidence extraction..."):
+            try:
+                # Initialize the semantic skill matcher
+                matcher = SemanticSkillMatcher()
+                
+                # Run analysis with configured thresholds
+                report = matcher.analyze(
+                    jd_text=jd_content,
+                    resume_text=resume_content
+                )
+                
+                st.subheader("🎯 Evidence-Backed Skill Validation Report")
+                
+                # Overall score and summary
+                st.metric("Overall Fit Score", f"{report.overall_relevance_score:.1%}")
+                
+                # Create tabs for different views
+                tab1, tab2, tab3, tab4 = st.tabs(["Summary", "Validated Skills", "Ignored Skills", "Evidence Details"])
+                
+                with tab1:
+                    st.write(f"**Validated Skills:** {len(report.validated_skills)}")
+                    st.write(f"**Weak Evidence:** {len(report.weak_evidence_skills)}")
+                    st.write(f"**Ignored (Skills-only):** {len(report.ignored_skills)}")
+                    st.write(f"**Not Found:** {len(report.missing_skills)}")
+                    
+                    st.divider()
+                    st.write("**Recommendations:**")
+                    if report.recommendations:
+                        for rec in report.recommendations:
+                            st.write(f"• {rec}")
+                
+                with tab2:
+                    st.write(f"**{len(report.validated_skills)} Validated Skills** (with project evidence)")
+                    for skill_result in report.validated_skills:
+                        with st.expander(f"✅ {skill_result.skill_name} — {skill_result.relevance_score:.0%} confidence"):
+                            st.write(f"**Status:** {skill_result.status.value}")
+                            st.write(f"**Confidence Score:** {skill_result.relevance_score:.1%}")
+                            st.write(f"**Reasoning:** {skill_result.reasoning}")
+                            if skill_result.evidence_list:
+                                st.write("**Evidence:**")
+                                for evidence in skill_result.evidence_list:
+                                    st.write(f"  - *{evidence.context_type}*: '{evidence.supporting_text[:100]}...'")
+                                    st.write(f"    Action verbs: {', '.join(evidence.action_verbs) if evidence.action_verbs else 'N/A'}")
+                
+                with tab3:
+                    st.write(f"**{len(report.ignored_skills)} Ignored Skills** (no project context)")
+                    for skill_result in report.ignored_skills:
+                        with st.expander(f"⊘ {skill_result.skill_name}"):
+                            st.write(f"**Status:** {skill_result.status.value}")
+                            st.write(f"**Reasoning:** {skill_result.reasoning}")
+                
+                with tab4:
+                    st.write("**Per-Skill Evidence Ledger**")
+                    st.dataframe(
+                        pd.DataFrame([
+                            {
+                                "Skill": skill.skill_name,
+                                "Status": skill.status.value,
+                                "Confidence": f"{skill.relevance_score:.0%}",
+                                "Evidence Count": len(skill.evidence_list),
+                                "Action Verbs": ", ".join(skill.evidence_list[0].action_verbs) if skill.evidence_list and skill.evidence_list[0].action_verbs else "N/A"
+                            }
+                            for skill in (report.validated_skills + report.weak_evidence_skills + report.ignored_skills)
+                        ]),
+                        use_container_width=True,
+                        hide_index=True
+                    )
+                    
+            except Exception as e:
+                st.error(f"Error during semantic analysis: {e}")
+                st.info("Please ensure both JD and Resume are properly formatted and contain skill-related content.")
     else:
         st.info("Please upload both a Job Description and a Resume to proceed.")
 
